@@ -464,7 +464,7 @@ if debug:
     pf.plot(XR[0], 0, DT)
     plt.show()
 
-if debug:
+if True:
     vmin = -0.1
     vmax = 0.1
     plt.subplot(1, 3, 1)
