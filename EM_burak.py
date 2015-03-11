@@ -1,8 +1,3 @@
-
-# coding: utf-8
-
-# In[1]:
-
 import numpy as np
 import theano
 import theano.tensor as T
@@ -12,13 +7,10 @@ import utils.particle_filter as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator
 
+debug = True # If True, show debug images
 
-# In[2]:
-
-debug = False # If True, show debug images
-
-
-# In[3]:
+if debug:
+    import matplotlib.pyplot as plt
 
 # Simulation Parameters
 DT = 0.005 # Simulation timestep
@@ -28,42 +20,40 @@ L1 = 100.
 ALPHA  = 100 # Image Regularization
 BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-N_T = 300 # Number of time steps
-L_I = 15 # Linear dimension of image
-L_N = 17 # Linear dimension of neuron receptive field grid
+N_T = 100 # Number of time steps
+L_I = 10 # Linear dimension of image
+L_N = 12 # Linear dimension of neuron receptive field grid
 
 N_B = 1 # Number of batches of data (must be 1)
 
 # EM Parameters
-
 # M - Parameters (ADADELTA)
 Rho = 0.1
 Eps = 0.001
-
 N_g_itr = 5
 N_itr = 20
-
 # E Parameters (Particle Filter)
 N_P = 25 # Number of particles for the EM
-
-
 N_Pix = L_I ** 2 # Number of pixels in image
 N_N = L_N ** 2 # Number of neurons
 N_L = N_Pix # Number of latent factors
 
 
-# In[4]:
-
-XS, YS = np.meshgrid(np.arange(- L_I / 2, L_I / 2),
-                     np.arange(- L_I / 2, L_I / 2))
+# Initialize pixel and LGN positions
+#XS, YS = np.meshgrid(np.arange(- L_I / 2, L_I / 2),
+#                     np.arange(- L_I / 2, L_I / 2))
+XS = np.arange(- L_I / 2, L_I / 2)
+YS = np.arange(- L_I / 2, L_I / 2)
 XS, YS = XS.ravel().astype('float32'), YS.ravel().astype('float32') # Position of pixels
 XE, YE = np.meshgrid(np.arange(- L_N / 2, L_N / 2),
                      np.arange(- L_N / 2, L_N / 2))
 XE, YE = XE.ravel().astype('float32'), YE.ravel().astype('float32') # Position of LGN receptive fields
 #XE = 0.5 * XE
 #YE = 0.5 * YE
-S = np.zeros((N_Pix,)).astype('float32') # Pixel values
-Sig = 0.3 * np.ones((N_Pix,)).astype('float32') # Pixel spread sigmas
+S = np.zeros((L_I, L_I)).astype('float32') # Pixel values
+# Assumes that the first dimension is 'X' and the second dimension is 'Y'
+
+Var = 0.09 * np.ones((L_I,)).astype('float32') # Pixel spread variances
 G = 1. # Gain factor ... depends on Sig. makes inner products have max about 1... auto set later
 
 XR = np.zeros((N_B, N_T)).astype('float32') # X-Position of retina
@@ -76,15 +66,13 @@ D = np.zeros((N_L, N_Pix)).astype('float32')  # Dictionary going from latent fac
 A = np.zeros((N_L,)).astype('float32')      # Sparse Coefficients
 
 
-# In[5]:
-
+# Define Theano Variables
 t_XS = theano.shared(XS, 'XS')
 t_YS = theano.shared(YS, 'YS')
 t_XE = theano.shared(XE, 'XE')
 t_YE = theano.shared(YE, 'YE')
-t_Sig = theano.shared(Sig, 'Sig')
+t_Var = theano.shared(Var, 'Sig')
 
-#t_S = T.vector('S')
 t_S = theano.shared(S, 'S')
 
 t_XR = T.matrix('XR')
@@ -95,11 +83,8 @@ t_A = theano.shared(A, 'A')
 
 t_Wbt = T.matrix('Wbt')
 
-
-# In[6]:
-
 # Theano Parameters
-t_L0 = T.scalar('L0').astype('float32')
+t_L0 = T.scalar('L0') #FIXME
 t_L1 = T.scalar('L1')
 t_DT = T.scalar('DT')
 t_DC = T.scalar('DC')
@@ -108,23 +93,33 @@ t_BETA = T.scalar('BETA')
 t_G = T.scalar('G')
 
 
-# In[7]:
-
 # Note in this computation, we do the indices in this form:
 #  b, i, j, t
 #  batch, pixel, neuron, timestep
-t_dX = t_XS.dimshuffle('x', 0, 'x', 'x') - t_XE.dimshuffle('x', 'x', 0, 'x') - t_XR.dimshuffle(0, 'x', 'x', 1)
-t_dY = t_YS.dimshuffle('x', 0, 'x', 'x') - t_YE.dimshuffle('x', 'x', 0, 'x') - t_YR.dimshuffle(0, 'x', 'x', 1)
-t_PixRFCoupling = T.exp(-0.5 * (t_dX ** 2 + t_dY ** 2) 
-                        / t_Sig.dimshuffle('x', 0, 'x', 'x') ** 2) / (t_Sig.dimshuffle('x', 0, 'x', 'x') ** 2)
-t_PixRFCoupling.name = 'PixRFCoupling'
+t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x') 
+        - t_XE.dimshuffle('x', 'x', 0, 'x') 
+        - t_XR.dimshuffle(0, 'x', 'x', 1))
+t_dX.name = 'dX'
 
+t_dY = (t_YS.dimshuffle('x', 0, 'x', 'x') 
+        - t_YE.dimshuffle('x', 'x', 0, 'x') 
+        - t_YR.dimshuffle(0, 'x', 'x', 1))
+t_dY.name = 'dY'
 
-# In[8]:
+t_PixRFCouplingX = T.exp(-0.5 * t_dX ** 2 / 
+                         t_Var.dimshuffle('x', 0, 'x', 'x'))
+t_PixRFCouplingY = T.exp(-0.5 * t_dY ** 2 / 
+                         t_Var.dimshuffle('x', 0, 'x', 'x'))
+t_PixRFCouplingX.name = 'PixRFCouplingX'
+t_PixRFCouplingY.name = 'PixRFCouplingY'
+
 
 # Matrix of inner products between the images and the retinal RFs
 # indices: b, j, t
-t_Ips = T.sum(t_S.dimshuffle('x', 0, 'x', 'x') * t_PixRFCoupling, axis = 1)
+t_IpsX = T.sum(t_S.dimshuffle('x', 0, 1, 'x', 'x') * 
+               t_PixRFCouplingX.dimshuffle(0, 1, 'x', 2, 3), axis = 1)
+t_IpsX.name = 'IpsX'
+t_Ips = T.sum(t_IpsX * t_PixRFCouplingY, axis = 1)
 t_Ips.name = 'Ips'
 # Firing probabilities indexed by
 # b, j, t
@@ -279,11 +274,11 @@ class PoissonLP(PF.LikelihoodPotential):
 
 # Initialize Image
 ig = ImageGenerator(L_I)
-#ig.make_T()
-ig.random()
+ig.make_T()
+#ig.random()
 ig.smooth()
 ig.normalize()
-S = ig.img.ravel()
+S = ig.img
 t_S.set_value(S)
 if (debug):
     ig.plot()
@@ -311,7 +306,7 @@ if (debug):
     plt.subplot(1,2,2)
     plt.plot(np.arange(N_T) * DT, YR[0])
     plt.title('y coordinate')
-
+    plt.show()
 
 # In[23]:
 
@@ -325,7 +320,7 @@ G = (1 / Ips.max()).astype('float32')
 if debug:
     plt.title('Firing Probability Histogram')
     plt.hist(FP.ravel())
-
+    plt.show()
 
 # In[25]:
 
@@ -340,7 +335,7 @@ if debug:
     plt.title('Original Image')
     plt.imshow(S.reshape(L_I, L_I), cmap = plt.cm.gray, interpolation = 'nearest')
     plt.colorbar()
-
+    plt.show()
 
 # In[26]:
 
@@ -420,7 +415,7 @@ if debug:
     plt.title('Error')
     plt.imshow(np.abs(t_S.get_value() - S).reshape(L_I, L_I), cmap = plt.cm.gray, interpolation = 'nearest')
     plt.colorbar()
-
+    plt.show()
 
 # In[41]:
 
@@ -435,20 +430,11 @@ if debug:
     pf.plot(XR[0], 0, DT)
 
 
-# In[34]:
-
-
-
-# In[35]:
 
 t_S.set_value(0.5 + np.zeros(S.shape).astype('float32'))
 
-# In[36]:
-
 print 'Full EM'
 
-
-# In[37]:
 
 for u in range(N_itr):
 #    t = N_T
@@ -464,13 +450,6 @@ for u in range(N_itr):
 
 
     for v in range(N_g_itr):   
-#        E, E_rec, E_sp, E_R = img_grad(np.array([pf.means])[:, 0:t, 0],
-#                                       np.array([pf.means])[:, 0:t, 1],
-#                                       R[:, 0:t], Wbt[:, 0:t],
-#                                       L0, L1, DT, G, 0.5 * ALPHA * t / N_T, BETA * t / N_T,
-#                                       Rho, Eps)
-
-
         E, E_rec, E_sp, E_R = img_grad(pf.XS[:, :, 0].transpose()[:, 0:t],
                                        pf.XS[:, :, 1].transpose()[:, 0:t],
                                        R[:, 0:t], pf.WS.transpose()[:, 0:t],
@@ -480,15 +459,10 @@ for u in range(N_itr):
     
     print 'Image SNR ' + str(SNR(S, t_S.get_value()))
 
-
-# In[38]:
-
 if debug:
     pf.run(R_, 25)
     pf.plot(XR[0], 0, DT)
-
-
-# In[39]:
+    plt.show()
 
 if debug:
     vmin = -0.1
@@ -510,10 +484,9 @@ if debug:
     plt.title('Error')
     plt.imshow(np.abs(t_S.get_value() - S).reshape(L_I, L_I), cmap = plt.cm.gray, interpolation = 'nearest')
     plt.colorbar()
+    plt.show()
 
-
-# In[40]:
 
 if debug:
     plt.plot(np.sum(pf.WS ** 2, axis = 1) ** -1)
-
+    plt.show()
