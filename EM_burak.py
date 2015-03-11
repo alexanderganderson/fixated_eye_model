@@ -9,8 +9,8 @@ from utils.image_gen import ImageGenerator
 
 debug = True # If True, show debug images
 
-if debug:
-    import matplotlib.pyplot as plt
+#if debug:
+import matplotlib.pyplot as plt
 
 # Simulation Parameters
 DT = 0.005 # Simulation timestep
@@ -30,7 +30,7 @@ N_B = 1 # Number of batches of data (must be 1)
 # M - Parameters (ADADELTA)
 Rho = 0.1
 Eps = 0.001
-N_g_itr = 5
+nN_g_itr = 5
 N_itr = 20
 # E Parameters (Particle Filter)
 N_P = 25 # Number of particles for the EM
@@ -484,9 +484,10 @@ if debug:
     plt.title('Error')
     plt.imshow(np.abs(t_S.get_value() - S).reshape(L_I, L_I), cmap = plt.cm.gray, interpolation = 'nearest')
     plt.colorbar()
-    plt.show()
-
+#    plt.show()
+    plt.savefig('img_est.png')
 
 if debug:
     plt.plot(np.sum(pf.WS ** 2, axis = 1) ** -1)
     plt.show()
+
