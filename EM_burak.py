@@ -7,7 +7,7 @@ import utils.particle_filter as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator
 
-debug = True # If True, show debug images
+debug = False # If True, show debug images
 
 #if debug:
 import matplotlib.pyplot as plt
@@ -30,7 +30,7 @@ N_B = 1 # Number of batches of data (must be 1)
 # M - Parameters (ADADELTA)
 Rho = 0.1
 Eps = 0.001
-nN_g_itr = 5
+N_g_itr = 5
 N_itr = 20
 # E Parameters (Particle Filter)
 N_P = 25 # Number of particles for the EM
