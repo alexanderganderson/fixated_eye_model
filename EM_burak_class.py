@@ -93,15 +93,15 @@ class EMBurak:
 
         # Simulation Parameters
         self.DT = 0.005 # Simulation timestep
-        self.DC = 20.  # Diffusion Constant
+        self.DC = 40.  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
-        self.ALPHA  = 100 # Image Regularization
+        self.ALPHA  = 1. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-        self.N_T = 100 # Number of time steps
-        self.L_I = 10 # Linear dimension of image
-        self.L_N = 12 # Linear dimension of neuron receptive field grid
+        self.N_T = 300 # Number of time steps
+        self.L_I = 20 # Linear dimension of image
+        self.L_N = 24 # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
 
