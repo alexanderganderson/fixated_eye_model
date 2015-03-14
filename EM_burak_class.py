@@ -87,28 +87,28 @@ class EMBurak:
         """
         Initialize the Parameters of the Model
         """
-        self.debug = False # If True, show debug images
+        self.debug = True # If True, show debug images
 
 
 
         # Simulation Parameters
-        self.DT = 0.005 # Simulation timestep
-        self.DC = 40.  # Diffusion Constant
+        self.DT = 0.003 # Simulation timestep
+        self.DC = 1.  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
         self.ALPHA  = 1. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-        self.N_T = 300 # Number of time steps
-        self.L_I = 20 # Linear dimension of image
-        self.L_N = 24 # Linear dimension of neuron receptive field grid
+        self.N_T = 200 # Number of time steps
+        self.L_I = 15 # Linear dimension of image
+        self.L_N = 17 # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
 
         # EM Parameters
         # M - Parameters (ADADELTA)
-        self.Rho = 0.1
-        self.Eps = 0.001
+        self.Rho = 0.8
+        self.Eps = 0.01
         self.N_g_itr = 5
         self.N_itr = 20
 
@@ -291,7 +291,7 @@ class EMBurak:
     def init_image(self):
         # Initialize Image
         self.ig = ImageGenerator(self.L_I)
-        self.ig.make_T()
+        self.ig.make_E()
         #self.ig.random()
         self.ig.smooth()
         self.ig.normalize()
@@ -335,7 +335,9 @@ class EMBurak:
                            self.L0, self.L1, 
                            self.DT, self.G)
         self.G = (1. / Ips.max()).astype('float32')
-
+        Ips, FP = self.RFS(self.XR, self.YR, 
+                           self.L0, self.L1, 
+                           self.DT, self.G)
         if self.debug:
             plt.title('Firing Probability Histogram')
             plt.hist(FP.ravel())
@@ -406,10 +408,6 @@ class EMBurak:
         Prints the costs associated with this step
         """
         self.reset_img_gpu()
-        #self.t_S.set_value(0.5 + np.zeros(self.S.shape).astype('float32'))
-        #self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
-        #self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
-
 
         print 'Original Path, infer image'
         print 'Spike Energy | Reg. Energy | SNR' 
@@ -460,15 +458,15 @@ class EMBurak:
         if self.debug:
             self.pf.plot(self.XR[0], self.YR[0], self.DT)
 
-    def infer_path_img(self, N_itr = 10, N_g_itr = 5):
+    def infer_path_img(self, N_itr = 20, N_g_itr = 5):
         self.reset_img_gpu()
         
         print 'Full EM'
 
 
         for u in range(N_itr):
-        #    t = self.N_T
-            t = self.N_T * (u + 1) / N_itr
+            t = self.N_T
+        #    t = self.N_T * (u + 1) / N_itr
             print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
             self.pf.run(self.R_[0:t], self.N_P)
 
