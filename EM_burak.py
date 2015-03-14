@@ -28,8 +28,8 @@ N_B = 1 # Number of batches of data (must be 1)
 
 # EM Parameters
 # M - Parameters (ADADELTA)
-Rho = 0.9
-Eps = 0.01
+Rho = 0.4
+Eps = 0.001
 N_g_itr = 5
 N_itr = 20
 # E Parameters (Particle Filter)
