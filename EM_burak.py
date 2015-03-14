@@ -464,7 +464,7 @@ if debug:
     pf.plot(XR[0], 0, DT)
     plt.show()
 
-if True:
+if debug:
     vmin = -0.1
     vmax = 0.1
     plt.subplot(1, 3, 1)
@@ -484,8 +484,8 @@ if True:
     plt.title('Error')
     plt.imshow(np.abs(t_S.get_value() - S).reshape(L_I, L_I), cmap = plt.cm.gray, interpolation = 'nearest')
     plt.colorbar()
-#    plt.show()
-    plt.savefig('img_est.png')
+    plt.show()
+#    plt.savefig('img_est.png')
 
 if debug:
     plt.plot(np.sum(pf.WS ** 2, axis = 1) ** -1)
