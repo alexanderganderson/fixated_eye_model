@@ -346,29 +346,41 @@ class ParticleFilter:
                                  axis = 1) - self.means ** 2)
     
             
-    def plot(self, X, d, DT):
+    def plot(self, X0, X1, DT):
         """
         Generate a plot of the estimated hidden state and the real hidden state
             as a function of time
-        X - actual hidden state along the dimension that we want
-        #Y - observed state
-        d - index for which dimension of hidden state to plot
+        X0 - actual hidden state along dimension 0
+        X1 - actual hidden state along dimension 1
         DT - timestep size
         """
         
                 
-        
+        plt.subplot(1, 2, 1)
         plt.fill_between(DT * np.arange(self.N_T), 
                          self.means[:, 0] - self.sdevs[:, 0], 
                          self.means[:, 0] + self.sdevs[:, 0], 
                          alpha = 0.5, linewidth = 1.)
         plt.plot(DT * np.arange(self.N_T), self.means[:, 0], label = 'estimate')
-        plt.plot(DT * np.arange(self.N_T), X, label = 'actual')
+        plt.plot(DT * np.arange(self.N_T), X0, label = 'actual')
         plt.xlabel('Time (s)')
         plt.ylabel('Relative position (pixels)')
         plt.legend()
-        plt.title('Estimated versus actual position given the image')
-        #plt.show()
+        plt.title('Estimated versus actual position given the image for dim0')
+        
+        plt.subplot(1, 2, 2)
+        plt.fill_between(DT * np.arange(self.N_T), 
+                         self.means[:, 1] - self.sdevs[:, 1], 
+                         self.means[:, 1] + self.sdevs[:, 1], 
+                         alpha = 0.5, linewidth = 1.)
+        plt.plot(DT * np.arange(self.N_T), self.means[:, 1], label = 'estimate')
+        plt.plot(DT * np.arange(self.N_T), X1, label = 'actual')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Relative position (pixels)')
+        plt.legend()
+        plt.title('Estimated versus actual position given the image for dim1')
+        
+        plt.show()
 
 def main():
     # A quick example: consider a HMM with gaussian transitions, and 
