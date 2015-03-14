@@ -93,7 +93,7 @@ class EMBurak:
 
         # Simulation Parameters
         self.DT = 0.005 # Simulation timestep
-        self.DC = 20.  # Diffusion Constant
+        self.DC = 40.  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
         self.ALPHA  = 100. # Image Regularization
@@ -110,7 +110,7 @@ class EMBurak:
         self.Rho = 0.4
         self.Eps = 0.001
         self.N_g_itr = 5
-        self.N_itr = 20
+        self.N_itr = 15
 
         # E Parameters (Particle Filter)
         self.N_P = 25 # Number of particles for the EM
