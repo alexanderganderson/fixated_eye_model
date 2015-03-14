@@ -469,8 +469,8 @@ class EMBurak:
 
 
         for u in range(N_itr):
-            t = self.N_T
-        #    t = self.N_T * (u + 1) / N_itr
+        #    t = self.N_T
+            t = self.N_T * (u + 1) / N_itr
             print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
             self.pf.run(self.R_[0:t], self.N_P)
 
