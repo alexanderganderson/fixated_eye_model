@@ -21,7 +21,7 @@ class Center:
         #   A product of gaussians is also a gaussian with mean, sdev given as (mn, sn)
         self.m1 = np.array([0, 0], dtype = 'float64') # center of image
         self.s0 = np.sqrt(self.D * self.dt) # Standard deviation for diffusion
-        self.s1 = self.Lx / 2  # Standard Deviation for centering gaussian
+        self.s1 = self.Lx / 4  # Standard Deviation for centering gaussian
         self.sn = 1 / np.sqrt(1 / self.s0 ** 2 + 1 / self.s1 ** 2)
 
         
