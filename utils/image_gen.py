@@ -35,7 +35,7 @@ class ImageGenerator:
         self.img[1, 1:-1] = 1
         self.img[2:-1, self.L_I / 2] = 1
         
-    def smooth(self, a = 3, sig = 0.4):
+    def smooth(self, a = 3, sig = 0.1):
         X = np.arange(-a, a+1).astype('float32')
         Y = X
         Xg, Yg = np.meshgrid(X, Y)
