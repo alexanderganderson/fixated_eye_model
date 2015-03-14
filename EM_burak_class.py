@@ -87,7 +87,7 @@ class EMBurak:
         """
         Initialize the Parameters of the Model
         """
-        self.debug = True # If True, show debug images
+        self.debug = False # If True, show debug images
 
 
 
