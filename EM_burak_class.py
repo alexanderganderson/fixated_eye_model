@@ -220,7 +220,7 @@ class EMBurak:
         self.t_E_R.name = 'E_R'
 
         self.t_E_rec = self.t_ALPHA * (
-                            T.mean((self.t_S) ** 2) + 
+                            T.mean((self.t_S - 0.5) ** 2) + 
                             T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
                             T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0))
                             )
