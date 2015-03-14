@@ -20,9 +20,9 @@ L1 = 100.
 ALPHA  = 100 # Image Regularization
 BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-N_T = 100 # Number of time steps
-L_I = 10 # Linear dimension of image
-L_N = 12 # Linear dimension of neuron receptive field grid
+N_T = 300 # Number of time steps
+L_I = 14 # Linear dimension of image
+L_N = 18 # Linear dimension of neuron receptive field grid
 
 N_B = 1 # Number of batches of data (must be 1)
 
