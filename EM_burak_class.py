@@ -92,11 +92,11 @@ class EMBurak:
 
 
         # Simulation Parameters
-        self.DT = 0.003 # Simulation timestep
+        self.DT = 0.005 # Simulation timestep
         self.DC = 1.  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
-        self.ALPHA  = 1. # Image Regularization
+        self.ALPHA  = 100. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
         self.N_T = 200 # Number of time steps
@@ -219,7 +219,11 @@ class EMBurak:
                                + (1 - self.t_R.dimshuffle('x', 0, 1)) * T.log(1 - self.t_FP), axis = 1) * self.t_Wbt)
         self.t_E_R.name = 'E_R'
 
-        self.t_E_rec = self.t_ALPHA * T.mean((self.t_S -0.5) ** 2)
+        self.t_E_rec = self.t_ALPHA * (
+                            T.mean((self.t_S) ** 2) + 
+                            T.sum(T.switch(t_S < 0., -t_S, 0)) + 
+                            T.sum(T.switch(t_S > 1., t_S - 1, 0))
+                            )
         self.t_E_rec.name = 'E_rec'
 
         self.t_E = self.t_E_rec + self.t_E_R
