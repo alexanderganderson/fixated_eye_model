@@ -274,8 +274,8 @@ class PoissonLP(PF.LikelihoodPotential):
 
 # Initialize Image
 ig = ImageGenerator(L_I)
-ig.make_T()
-#ig.random()
+#ig.make_T()
+ig.random()
 ig.smooth()
 ig.normalize()
 S = ig.img
