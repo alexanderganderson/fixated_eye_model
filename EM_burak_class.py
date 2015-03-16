@@ -500,12 +500,12 @@ class EMBurak:
             
             # Run E step
             self.run_E(t)
-            self.EM_paths[(u, t, 'means')] = self.pf.means
-            self.EM_paths[(u, t, 'sdevs')] = self.pf.sdevs
+            self.EM_paths[(u, 'means')] = self.pf.means
+            self.EM_paths[(U, 'sdevs')] = self.pf.sdevs
             
             # Run M step
             self.run_M(t, N_g_itr = N_g_itr)
-            self.EM_imgs[(u, t)] = self.t_S.get_value()
+            self.EM_imgs[u] = self.t_S.get_value()
 
     def save(self):
         pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
