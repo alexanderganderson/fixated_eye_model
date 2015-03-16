@@ -136,7 +136,7 @@ class EMBurak:
         self.S = np.zeros((self.L_I, self.L_I)).astype('float32') # Pixel values
         # Assumes that the first dimension is 'X' and the second dimension is 'Y'
 
-        self.Var = 0.09 * np.ones((self.L_I,)).astype('float32') # Pixel spread variances
+        self.Var = 0.25 * np.ones((self.L_I,)).astype('float32') # Pixel spread variances
         self.G = 1. # Gain factor ... depends on Sig. makes inner products have max about 1... auto set later
 
         self.XR = np.zeros((self.N_B, 
