@@ -101,9 +101,9 @@ class EMBurak:
         self.ALPHA  = 100. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-        self.N_T = 100 # Number of time steps
-        self.L_I = 5 # Linear dimension of image
-        self.L_N = 8 # Linear dimension of neuron receptive field grid
+        self.N_T = 300 # Number of time steps
+        self.L_I = 14 # Linear dimension of image
+        self.L_N = 18 # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
 
