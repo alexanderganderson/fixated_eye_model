@@ -42,6 +42,6 @@ paths = pkl.load(open(f2, 'rb'))
 
 S_actual = images['truth']
 
-S_est = images[(19, 100)]
+S_est = images[(19, 300)]
 
 plot_image_estimate(S_actual, S_est)
