@@ -7,7 +7,7 @@ import utils.particle_filter as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator
 import matplotlib.pyplot as plt
-
+import cPickle as pkl
 
 
 # For the particle filter module, we create this class for the emission probabilities
@@ -78,11 +78,11 @@ class EMBurak:
         self.set_gain_factor()
         self.gen_spikes()
         self.init_particle_filter()
-        self.true_costs()
-        self.true_image_infer_path_costs()
-        self.true_path_infer_image_costs()
-        #self.infer_path_img()
+        #self.true_costs()
+        #self.true_image_infer_path_costs()
+        #self.true_path_infer_image_costs()
         self.run_EM()
+        self.save()
         
         
     def init_params(self):
@@ -101,9 +101,9 @@ class EMBurak:
         self.ALPHA  = 100. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-        self.N_T = 300 # Number of time steps
-        self.L_I = 14 # Linear dimension of image
-        self.L_N = 18 # Linear dimension of neuron receptive field grid
+        self.N_T = 100 # Number of time steps
+        self.L_I = 5 # Linear dimension of image
+        self.L_N = 8 # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
 
@@ -416,19 +416,98 @@ class EMBurak:
         self.reset_img_gpu()
 
         print 'Original Path, infer image'
-        print 'Spike Energy | Reg. Energy | SNR' 
         t = self.N_T
-        for v in range(N_g_itr):   
+        self.run_M(t)
+
+
+    
+
+    def true_image_infer_path_costs(self):
+        print 'Original image, Infer Path'
+        print 'Path SNR'
+        self.t_S.set_value(self.S)
+        for _ in range(4):
+            self.run_E(self.N_T)
+
+        if self.debug:
+            self.pf.plot(self.XR[0], self.YR[0], self.DT)
+    
+    
+    
+    def run_E(self, t):
+        """
+        Runs the expectation step for the first t time steps
+        t - number of timesteps
+        The result is saved in self.pf.XS,WS,means
+        """
+        if (t > self.N_T):
+            print 'Maximum simulated timesteps exceeded in E step'
+        self.pf.run(self.R_[0:t], self.N_P)
+        print 'Path SNR ' + str(self.SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
+    
+    
+    def reset_M_aux(self):
+        """
+        Resets auxillary gradient descent variables for the M step
+            eg. for ADADelta, we reset the RMS of dx and g
+        """
+        self.t_S_Eg2.set_value(np.zeros_like(self.S).astype('float32'))
+        self.t_S_EdS2.set_value(np.zeros_like(self.S).astype('float32'))
+        
+    
+    def run_M(self, t, N_g_itr = 5):
+        """
+        Runs the maximization step for the first t time steps
+        resets the values of auxillary gradient descent variables at start
+        t - number of time steps
+        result is saved in t_S.get_value()
+        """
+        self.reset_M_aux()
+        print 'Spike Energy / t | Reg. Energy / t | SNR' 
+        for v in range(N_g_itr):
             E, E_rec, E_R = self.img_grad(
-                                    self.XR[:, 0:t], self.YR[:, 0:t],
-                                    self.R[:, 0:t], self.Wbt[:, 0:t],
-                                    self.L0, self.L1, self.DT, 
-                                    self.G, self.ALPHA,
-                                    self.Rho, self.Eps)
-            print (str(E_R / self.N_T) + ' ' + 
-                   str(E_rec / self.N_T) + ' ' +  
+                       self.pf.XS[:, :, 0].transpose()[:, 0:t],
+                       self.pf.XS[:, :, 1].transpose()[:, 0:t],
+                       self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
+                       self.L0, self.L1, self.DT, 
+                       self.G, 0.5 * self.ALPHA * t / self.N_T,
+                       self.Rho, self.Eps)
+    
+            print (str(E_R / t) + ' ' + 
+                   str(E_rec / t) + ' ' +  
                    str(self.SNR(self.S, self.t_S.get_value())))
 
+        
+    def run_EM(self, N_itr = 20, N_g_itr = 5):
+        """
+        Runs full expectation maximization algorithm
+        N_itr - number of iterations of EM
+        N_g_itr - number of gradient steps in M step
+        """
+        self.reset_img_gpu()
+        self.EM_imgs = {}
+        self.EM_imgs['truth'] = self.S
+        self.EM_paths = {}
+        
+        
+        print 'Running full EM'
+        for u in range(N_itr):
+            #t = self.N_T
+            t = self.N_T * (u + 1) / N_itr
+            print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
+            
+            # Run E step
+            self.run_E(t)
+            self.EM_paths[(u, t, 'means')] = self.pf.means
+            self.EM_paths[(u, t, 'sdevs')] = self.pf.sdevs
+            
+            # Run M step
+            self.run_M(t, N_g_itr = N_g_itr)
+            self.EM_imgs[(u, t)] = self.t_S.get_value()
+
+    def save(self):
+        pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
+        pkl.dump(self.EM_paths, open("paths.pkl", 'wb'))
 
     def plot_image_estimate(self):
         vmin = -1.
@@ -453,109 +532,14 @@ class EMBurak:
         plt.colorbar()
         plt.show()
 
-    def true_image_infer_path_costs(self):
-        print 'Original image, Infer Path'
-        print 'Path SNR'
-        self.t_S.set_value(self.S)
-        for _ in range(4):
-            self.pf.run(self.R_, self.N_P)
-            print str(self.SNR(self.XR[0], self.pf.means[:, 0]))
-
-        if self.debug:
-            self.pf.plot(self.XR[0], self.YR[0], self.DT)
-    
-    
-    
-    def run_E(self, t):
-        """
-        Runs the expectation step for the first t time steps
-        t - number of timesteps
-        The result is saved in self.pf.XS,WS,means
-        """
-        if (t > N_T):
-            print 'Maximum simulated timesteps exceeded in E step'
-        self.pf.run(self.R_[0:t], self.N_P)
-        print 'Path SNR ' + str(self.SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
-    
-    
-    def reset_M_aux(self, t):
-        """
-        Resets auxillary gradient descent variables for the M step
-            eg. for ADADelta, we reset the RMS of dx and g
-        """
-        self.t_S_Eg2.set_value(np.zeros_like(self.S).astype('float32'))
-        self.t_S_EdS2.set_value(np.zeros_like(self.S).astype('float32'))
-        
-    
-    def run_M(self, t, N_g_itr = 5):
-        """
-        Runs the maximization step for the first t time steps
-        resets the values of auxillary gradient descent variables at start
-        t - number of time steps
-        result is saved in t_S.get_value()
-        """
-        self.reset_M_aux()
-        for v in range(N_g_itr):
-            E, E_rec, E_R = self.img_grad(
-                       self.pf.XS[:, :, 0].transpose()[:, 0:t],
-                       self.pf.XS[:, :, 1].transpose()[:, 0:t],
-                       self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
-                       self.L0, self.L1, self.DT, 
-                       self.G, 0.5 * self.ALPHA * t / self.N_T,
-                       self.Rho, self.Eps)
-    
-            print ('Spike Energy per timestep ' + str(E_R / t) + 
-                   ' Img Reg per timestep ' + str(E_rec / t))
-        
-    def run_EM(self, N_itr = 20, N_g_itr = 5):
-        self.reset_img_gpu()
-        print 'Running full EM'
-        for u in range(N_itr):
-            #t = self.N_T
-            t = self.N_T * (u + 1) / N_itr
-            self.run_E(t)
-            self.run_M(t, N_g_itr = N_g_itr)
-    
-    
-    
-    
-    def infer_path_img(self, N_itr = 20, N_g_itr = 5):
-        self.reset_img_gpu()
-        
-        print 'Full EM'
 
 
-        for u in range(N_itr):
-        #    t = self.N_T
-            t = self.N_T * (u + 1) / N_itr
-            print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
-            self.pf.run(self.R_[0:t], self.N_P)
-
-            print 'Path SNR ' + str(self.SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
-    
-            self.t_S_Eg2.set_value(np.zeros_like(self.S).astype('float32'))
-            self.t_S_EdS2.set_value(np.zeros_like(self.S).astype('float32'))
-
-
-
-            for v in range(N_g_itr):   
-                E, E_rec, E_R = self.img_grad(
-                           self.pf.XS[:, :, 0].transpose()[:, 0:t],
-                           self.pf.XS[:, :, 1].transpose()[:, 0:t],
-                           self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
-                           self.L0, self.L1, self.DT, 
-                           self.G, 0.5 * self.ALPHA * t / self.N_T,
-                           self.Rho, self.Eps)
-                print 'Spike Energy per timestep ' + str(E_R / t) + ' Img Reg per timestep ' + str(E_rec / t)
-    
-            print 'Image SNR ' + str(self.SNR(self.S, self.t_S.get_value()))
-
-
-
-def main():
-    emb = EMBurak()
-
-
-
+#def main():
 if __name__ == '__main__':
-    main()
+    emb = EMBurak()
+    
+
+
+
+#if __name__ == '__main__':
+#    main()
