@@ -94,14 +94,14 @@ class EMBurak:
 
 
         # Simulation Parameters
-        self.DT = 0.005 # Simulation timestep
+        self.DT = 0.002 # Simulation timestep
         self.DC = 40.  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
         self.ALPHA  = 100. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-        self.N_T = 300 # Number of time steps
+        self.N_T = 200 # Number of time steps
         self.L_I = 14 # Linear dimension of image
         self.L_N = 18 # Linear dimension of neuron receptive field grid
 
@@ -501,7 +501,7 @@ class EMBurak:
             # Run E step
             self.run_E(t)
             self.EM_paths[(u, 'means')] = self.pf.means
-            self.EM_paths[(U, 'sdevs')] = self.pf.sdevs
+            self.EM_paths[(u, 'sdevs')] = self.pf.sdevs
             
             # Run M step
             self.run_M(t, N_g_itr = N_g_itr)
