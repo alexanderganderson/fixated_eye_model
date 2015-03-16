@@ -297,7 +297,7 @@ class EMBurak:
     def init_image(self):
         # Initialize Image
         self.ig = ImageGenerator(self.L_I)
-        self.ig.make_E()
+        self.ig.make_big_E()
         #self.ig.random()
         self.ig.smooth()
         self.ig.normalize()
