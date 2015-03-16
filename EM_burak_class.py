@@ -488,6 +488,8 @@ class EMBurak:
         self.EM_imgs = {}
         self.EM_imgs['truth'] = self.S
         self.EM_paths = {}
+        self.EM.paths['truthX'] = self.XR[0]
+        self.EM.paths['truthY'] = self.YR[0]
         
         
         print 'Running full EM'

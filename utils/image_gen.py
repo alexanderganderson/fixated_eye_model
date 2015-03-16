@@ -28,9 +28,9 @@ class ImageGenerator:
         self.img[1:-1, 2] = 1
         
     def make_big_E(self):
-        self.img[1:3, 2:-1] = 1
-        self.img[self.L_I / 2 - 1: self.L_I/2 + 1, 2:-1] = 1
-        self.img[-4:-2, 2:-1] = 1
+        self.img[1:3, 2:-2] = 1
+        self.img[self.L_I / 2 - 1: self.L_I/2 + 1, 2:-2] = 1
+        self.img[-4:-2, 2:-2] = 1
         self.img[1:-2, 2:4] = 1
         
         
