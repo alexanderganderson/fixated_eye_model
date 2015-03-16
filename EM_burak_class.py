@@ -81,7 +81,9 @@ class EMBurak:
         self.true_costs()
         self.true_image_infer_path_costs()
         self.true_path_infer_image_costs()
-        self.infer_path_img()
+        #self.infer_path_img()
+        self.run_EM()
+        
         
     def init_params(self):
         """
@@ -461,7 +463,62 @@ class EMBurak:
 
         if self.debug:
             self.pf.plot(self.XR[0], self.YR[0], self.DT)
-
+    
+    
+    
+    def run_E(self, t):
+        """
+        Runs the expectation step for the first t time steps
+        t - number of timesteps
+        The result is saved in self.pf.XS,WS,means
+        """
+        if (t > N_T):
+            print 'Maximum simulated timesteps exceeded in E step'
+        self.pf.run(self.R_[0:t], self.N_P)
+        print 'Path SNR ' + str(self.SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
+    
+    
+    def reset_M_aux(self, t):
+        """
+        Resets auxillary gradient descent variables for the M step
+            eg. for ADADelta, we reset the RMS of dx and g
+        """
+        self.t_S_Eg2.set_value(np.zeros_like(self.S).astype('float32'))
+        self.t_S_EdS2.set_value(np.zeros_like(self.S).astype('float32'))
+        
+    
+    def run_M(self, t, N_g_itr = 5):
+        """
+        Runs the maximization step for the first t time steps
+        resets the values of auxillary gradient descent variables at start
+        t - number of time steps
+        result is saved in t_S.get_value()
+        """
+        self.reset_M_aux()
+        for v in range(N_g_itr):
+            E, E_rec, E_R = self.img_grad(
+                       self.pf.XS[:, :, 0].transpose()[:, 0:t],
+                       self.pf.XS[:, :, 1].transpose()[:, 0:t],
+                       self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
+                       self.L0, self.L1, self.DT, 
+                       self.G, 0.5 * self.ALPHA * t / self.N_T,
+                       self.Rho, self.Eps)
+    
+            print ('Spike Energy per timestep ' + str(E_R / t) + 
+                   ' Img Reg per timestep ' + str(E_rec / t))
+        
+    def run_EM(self, N_itr = 20, N_g_itr = 5):
+        self.reset_img_gpu()
+        print 'Running full EM'
+        for u in range(N_itr):
+            #t = self.N_T
+            t = self.N_T * (u + 1) / N_itr
+            self.run_E(t)
+            self.run_M(t, N_g_itr = N_g_itr)
+    
+    
+    
+    
     def infer_path_img(self, N_itr = 20, N_g_itr = 5):
         self.reset_img_gpu()
         
