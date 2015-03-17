@@ -327,11 +327,6 @@ class EMBurak:
         lp = PoissonLP(self.L0, self.L1, self.DT, self.G, self.spike_energy)
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp)
 
-        # Rearrange indices for use in the particle filter
-        self.R_ = np.transpose(self.R)
-
-
-
     def SNR(self, S, S0):
         return np.var(S) / np.var(S - S0)
 
@@ -430,7 +425,7 @@ class EMBurak:
         """
         if (t > self.N_T):
             print 'Maximum simulated timesteps exceeded in E step'
-        self.pf.run(self.R_[0:t], self.N_P)
+        self.pf.run(self.R.transpose()[0:t], self.N_P)
         print 'Path SNR ' + str(self.SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
     
     
