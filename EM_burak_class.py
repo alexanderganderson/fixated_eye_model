@@ -64,7 +64,7 @@ class PoissonLP(PF.LikelihoodPotential):
 
 
 class EMBurak:
-    def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
+    def __init__(self, _DT = 0.002, _DC = 40., _N_T = 100,
                  _L_I = 14, _L_N = 18):
         """
         Initializes all of the parameters and builds the relevant 
@@ -135,18 +135,17 @@ class EMBurak:
         self.init_theano_funcs()
         self.init_image()
         
+        self.init_particle_filter()
+
+    def gen_data(self):
+        """
+        Generates a path and spikes
+        """
         self.gen_path()
         self.set_gain_factor()
         self.gen_spikes()
-        self.init_particle_filter()
-        #self.true_costs()
-        #self.true_image_infer_path_costs()
-        #self.true_path_infer_image_costs()
-        #self.run_EM()
-        #self.save()
-
-
-
+        
+             
     def run(self):
         """
         Runs an iteration of EM
@@ -156,6 +155,9 @@ class EMBurak:
 
 
     def init_theano_vars(self):
+        """
+        Initializes all theano variables
+        """
         # Define Theano Variables
         self.t_XS = theano.shared(self.XS, 'XS')
         self.t_YS = theano.shared(self.YS, 'YS')
@@ -313,6 +315,23 @@ class EMBurak:
         if (self.debug):
             self.ig.plot()
 
+
+    def init_particle_filter(self):
+        # Define necessary components for the particle filter
+        D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
+        sdev = np.sqrt(self.DC * self.DT)
+        ipd = PF.GaussIPD(sdev * 0.01, 2)
+        tpd = PF.GaussTPD(sdev, 2)
+        ip = PF.GaussIP(sdev * 0.01, 2)
+        tp = PF.GaussTP(sdev, 2)
+        lp = PoissonLP(self.L0, self.L1, self.DT, self.G, self.spike_energy)
+        self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp)
+
+        # Rearrange indices for use in the particle filter
+        self.R_ = np.transpose(self.R)
+
+
+
     def SNR(self, S, S0):
         return np.var(S) / np.var(S - S0)
 
@@ -378,19 +397,6 @@ class EMBurak:
         print 'Mean firing rate ' + str(self.R.mean() / self.DT)
 
 
-    def init_particle_filter(self):
-        # Define necessary components for the particle filter
-        D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
-        sdev = np.sqrt(self.DC * self.DT)
-        ipd = PF.GaussIPD(sdev * 0.01, 2)
-        tpd = PF.GaussTPD(sdev, 2)
-        ip = PF.GaussIP(sdev * 0.01, 2)
-        tp = PF.GaussTP(sdev, 2)
-        lp = PoissonLP(self.L0, self.L1, self.DT, self.G, self.spike_energy)
-        self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp)
-
-        # Rearrange indices for use in the particle filter
-        self.R_ = np.transpose(self.R)
 
 
     def true_costs(self):
@@ -415,32 +421,7 @@ class EMBurak:
         self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
         self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
 
-    def true_path_infer_image_costs(self, N_g_itr = 10):
-        """
-        Infers the image given the true path
-        Prints the costs associated with this step
-        """
-        self.reset_img_gpu()
-
-        print 'Original Path, infer image'
-        t = self.N_T
-        self.run_M(t)
-
-
-    
-
-    def true_image_infer_path_costs(self):
-        print 'Original image, Infer Path'
-        print 'Path SNR'
-        self.t_S.set_value(self.S)
-        for _ in range(4):
-            self.run_E(self.N_T)
-
-        if self.debug:
-            self.pf.plot(self.XR[0], self.YR[0], self.DT)
-    
-    
-    
+   
     def run_E(self, t):
         """
         Runs the expectation step for the first t time steps
@@ -543,9 +524,39 @@ class EMBurak:
 
 
 
+    def true_path_infer_image_costs(self, N_g_itr = 10):
+        """
+        Infers the image given the true path
+        Prints the costs associated with this step
+        """
+        self.reset_img_gpu()
+
+        print 'Original Path, infer image'
+        t = self.N_T
+        self.run_M(t)
+
+
+    
+
+    def true_image_infer_path_costs(self):
+        print 'Original image, Infer Path'
+        print 'Path SNR'
+        self.t_S.set_value(self.S)
+        for _ in range(4):
+            self.run_E(self.N_T)
+
+        if self.debug:
+            self.pf.plot(self.XR[0], self.YR[0], self.DT)
+    
+    
+ 
+
+
+
 #def main():
 if __name__ == '__main__':
     emb = EMBurak()
+    emb.gen_data()
     emb.run()
     
 
