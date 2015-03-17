@@ -64,46 +64,28 @@ class PoissonLP(PF.LikelihoodPotential):
 
 
 class EMBurak:
-    def __init__(self):
+    def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
+                 _L_I = 14, _L_N = 18):
         """
         Initializes all of the parameters and builds the relevant 
              theano variables and functions. 
         """
-        self.init_params()
-        self.init_theano_vars()
-        self.init_theano_funcs()
-        self.init_image()
-        
-        self.gen_path()
-        self.set_gain_factor()
-        self.gen_spikes()
-        self.init_particle_filter()
-        #self.true_costs()
-        #self.true_image_infer_path_costs()
-        #self.true_path_infer_image_costs()
-        self.run_EM()
-        self.save()
-        
-        
-    def init_params(self):
-        """
-        Initialize the Parameters of the Model
-        """
+
         self.debug = False # If True, show debug images
 
 
 
         # Simulation Parameters
-        self.DT = 0.002 # Simulation timestep
-        self.DC = 40.  # Diffusion Constant
+        self.DT = _DT # Simulation timestep
+        self.DC = _DC  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
         self.ALPHA  = 100. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
 
-        self.N_T = 200 # Number of time steps
-        self.L_I = 14 # Linear dimension of image
-        self.L_N = 18 # Linear dimension of neuron receptive field grid
+        self.N_T = _N_T # Number of time steps
+        self.L_I = _L_I # Linear dimension of image
+        self.L_N = _L_N # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
 
@@ -147,6 +129,31 @@ class EMBurak:
         self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32') # Weighting for batches and time points
         #self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  # Dictionary going from latent factors to image
         #self.A = np.zeros((self.N_L,)).astype('float32')      # Sparse Coefficients
+        
+        
+        self.init_theano_vars()
+        self.init_theano_funcs()
+        self.init_image()
+        
+        self.gen_path()
+        self.set_gain_factor()
+        self.gen_spikes()
+        self.init_particle_filter()
+        #self.true_costs()
+        #self.true_image_infer_path_costs()
+        #self.true_path_infer_image_costs()
+        #self.run_EM()
+        #self.save()
+
+
+
+    def run(self):
+        """
+        Runs an iteration of EM
+        """
+        self.run_EM()
+        self.save()
+
 
     def init_theano_vars(self):
         # Define Theano Variables
@@ -539,6 +546,7 @@ class EMBurak:
 #def main():
 if __name__ == '__main__':
     emb = EMBurak()
+    emb.run()
     
 
 

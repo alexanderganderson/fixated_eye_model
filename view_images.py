@@ -4,7 +4,7 @@ import cPickle as pkl
 from scipy.ndimage.filters import gaussian_filter
 
 def plot_path(XY_act, est_mean, est_sdev, d):
-    DT = 0.005
+    DT = 0.002
     N_T = XY_act.shape[0]
 
     plt.fill_between(DT * np.arange(N_T), 
@@ -79,10 +79,11 @@ S_actual = gaussian_filter(S_actual, 0.5)
 
 N_T = paths['truthX'].shape[0]
 
-i = 10
+i = 2
 t = (i + 1) * N_T / 20
 
 S_est = images[i]
+S_est = gaussian_filter(S_est, 0.5)
 
 XY_act = np.zeros((t, 2))
 XY_act[:, 0] = paths['truthX'][0:t]
