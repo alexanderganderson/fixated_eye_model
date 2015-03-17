@@ -64,7 +64,7 @@ class PoissonLP(PF.LikelihoodPotential):
 
 
 class EMBurak:
-    def __init__(self, _DT = 0.002, _DC = 40., _N_T = 100,
+    def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
                  _L_I = 14, _L_N = 18):
         """
         Initializes all of the parameters and builds the relevant 
