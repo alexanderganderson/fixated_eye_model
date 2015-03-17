@@ -135,7 +135,7 @@ class EMBurak:
         self.init_theano_funcs()
         self.init_image()
         
-        self.init_particle_filter()
+        
 
     def gen_data(self):
         """
@@ -143,6 +143,9 @@ class EMBurak:
         """
         self.gen_path()
         self.set_gain_factor()
+        
+        self.init_particle_filter()
+        
         self.gen_spikes()
         
              
