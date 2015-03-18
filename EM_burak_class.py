@@ -95,7 +95,7 @@ class EMBurak:
         self.Rho = 0.4
         self.Eps = 0.001
         self.N_g_itr = 5
-        self.N_itr = 15
+        self.N_itr = 20
 
         # E Parameters (Particle Filter)
         self.N_P = 25 # Number of particles for the EM
@@ -459,10 +459,10 @@ class EMBurak:
                        self.L0, self.L1, self.DT, 
                        self.G, 0.5 * self.ALPHA * t / self.N_T,
                        self.Rho, self.Eps)
-    
+            self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
                    str(E_rec / t) + ' ' +  
-                   str(SNR(self.S, self.t_S.get_value())))
+                   str(self.img_SNR))
 
         
     def run_EM(self, N_itr = 20, N_g_itr = 5):
@@ -471,6 +471,9 @@ class EMBurak:
         N_itr - number of iterations of EM
         N_g_itr - number of gradient steps in M step
         """
+        self.N_itr = N_itr
+        self.N_g_itr = N_g_itr
+        
         self.reset_img_gpu()
         self.EM_imgs = {}
         self.EM_imgs['truth'] = self.S
@@ -497,15 +500,17 @@ class EMBurak:
     def save(self):
         pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
         pkl.dump(self.EM_paths, open("paths.pkl", 'wb'))
-        #params = {}
-        #params['DC'] = self.DC
-        #params['DT'] = self.DT
-        #params['L_I'] = self.L_I
-        #params['L_N'] = self.L_N
-        #params['L0'] = self.L0
-        #params['L1'] = self.L1
-        #params['N_T'] = self.N_T
-
+        params = {}
+        params['DC'] = self.DC
+        params['DT'] = self.DT
+        params['L_I'] = self.L_I
+        params['L_N'] = self.L_N
+        params['L0'] = self.L0
+        params['L1'] = self.L1
+        params['N_T'] = self.N_T
+        params['N_itr'] = self.N_itr
+        params['N_g_itr'] = self.N_g_itr
+        pkl.dump(params, open("params.pkl", 'wb'))
 
 
 
