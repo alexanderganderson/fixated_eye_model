@@ -1,6 +1,6 @@
 import numpy as np
 
-def SNR(self, S, S0):
+def SNR(S, S0):
     """
     S - actual value
     S0 - estimated value
