@@ -497,6 +497,17 @@ class EMBurak:
     def save(self):
         pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
         pkl.dump(self.EM_paths, open("paths.pkl", 'wb'))
+        #params = {}
+        #params['DC'] = self.DC
+        #params['DT'] = self.DT
+        #params['L_I'] = self.L_I
+        #params['L_N'] = self.L_N
+        #params['L0'] = self.L0
+        #params['L1'] = self.L1
+        #params['N_T'] = self.N_T
+
+
+
 
     def plot_image_estimate(self):
         vmin = -1.
@@ -562,6 +573,7 @@ if __name__ == '__main__':
     emb = EMBurak(_DC = 100., _DT = 0.001)
     emb.gen_data()
     emb.run()
+    pkl.dump(emb, open('whole_class.pkl', 'wb'))
     
 
 

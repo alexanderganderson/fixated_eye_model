@@ -4,7 +4,7 @@ import cPickle as pkl
 from scipy.ndimage.filters import gaussian_filter
 
 def plot_path(XY_act, est_mean, est_sdev, d):
-    DT = 0.002
+    DT = 0.001
     N_T = XY_act.shape[0]
 
     plt.fill_between(DT * np.arange(N_T), 
@@ -48,13 +48,6 @@ def plot_image_estimate(S_actual, S_est, XY_act, est_mean, est_sdev):
                interpolation = 'nearest',
                vmin = vmin, vmax = vmax)
     plt.colorbar()
-    
-    #plt.subplot(2, 3, 3)
-    #plt.title('Error')
-    #plt.imshow(np.abs(S_actual - S_est), 
-    #           cmap = plt.cm.gray, interpolation = 'nearest')
-    #plt.colorbar()
-    
     
     plt.subplot(2, 2, 3)
     plot_path(XY_act, est_mean, est_sdev, 0)
