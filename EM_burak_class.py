@@ -559,7 +559,7 @@ class EMBurak:
 
 #def main():
 if __name__ == '__main__':
-    emb = EMBurak()
+    emb = EMBurak(_DC = 100., _DT = 0.001)
     emb.gen_data()
     emb.run()
     
