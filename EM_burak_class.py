@@ -116,7 +116,7 @@ class EMBurak:
         # Position of LGN receptive fields
 
         self.S = np.zeros((self.L_I, self.L_I)).astype('float32') # Pixel values
-        # Assumes that the first dimension is 'X' and the second dimension is 'Y'
+        # Assumes that the first dimension is 'Y' and the second dimension is 'X'
 
         self.Var = 0.25 * np.ones((self.L_I,)).astype('float32') # Pixel spread variances
         self.G = 1. # Gain factor ... depends on Sig. makes inner products have max about 1... auto set later
@@ -211,10 +211,10 @@ class EMBurak:
 
         # Matrix of inner products between the images and the retinal RFs
         # indices: b, j, t
-        self.t_IpsX = T.sum(self.t_S.dimshuffle('x', 0, 1, 'x', 'x') * 
-                            self.t_PixRFCouplingX.dimshuffle(0, 1, 'x', 2, 3), axis = 1)
-        self.t_IpsX.name = 'IpsX'
-        self.t_Ips = T.sum(self.t_IpsX * self.t_PixRFCouplingY, axis = 1)
+        self.t_IpsY = T.sum(self.t_S.dimshuffle('x', 0, 1, 'x', 'x') * 
+                            self.t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3), axis = 1)
+        #self.t_IpsX.name = 'IpsX'
+        self.t_Ips = T.sum(self.t_IpsY * self.t_PixRFCouplingX, axis = 1)
         self.t_Ips.name = 'Ips'
         
         # Firing probabilities indexed by
