@@ -135,6 +135,7 @@ class EMBurak:
         self.init_theano_funcs()
         self.set_gain_factor()
         self.init_image()
+        self.init_particle_filter()
         
         
 
@@ -143,9 +144,6 @@ class EMBurak:
         Generates a path and spikes
         """
         self.gen_path()
-        
-        self.init_particle_filter()
-        
         self.gen_spikes()
         
              
