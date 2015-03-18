@@ -134,9 +134,9 @@ class EMBurak:
         self.init_theano_vars()
         self.init_theano_funcs()
         self.set_gain_factor()
-        self.init_image()
         self.init_particle_filter()
         
+        self.init_image()
         
 
     def gen_data(self):
@@ -304,6 +304,41 @@ class EMBurak:
 
         
 
+
+    def set_gain_factor(self):
+        
+        self.G = 1.
+        self.t_S.set_value(np.ones_like(self.S))
+        Ips, FP = self.RFS(self.XR, self.YR, 
+                           self.L0, self.L1, 
+                           self.DT, self.G)
+        self.G = (1. / Ips.max()).astype('float32')
+        #Ips, FP = self.RFS(self.XR, self.YR, 
+        #                   self.L0, self.L1, 
+        #                   self.DT, self.G)
+        #if self.debug:
+        #    plt.title('Firing Probability Histogram')
+        #    plt.hist(FP.ravel())
+        #    plt.show()
+
+#        if self.debug:
+#            q = 0
+#            t = 1 * (self.N_T - 1)
+#            plt.subplot(1, 2, 1)
+#            plt.title('IPs at T = ' + str(t))
+#            plt.imshow( (1 / self.DT) * Ips[q, :, t].reshape(self.L_N, self.L_N), 
+#                       cmap = plt.cm.gray, 
+#                       interpolation = 'nearest')
+#            plt.colorbar()
+#            plt.subplot(1, 2, 2)
+#            plt.title('Original Image')
+#            plt.imshow(self.S.reshape(self.L_I, self.L_I), 
+#                       cmap = plt.cm.gray, 
+#                       interpolation = 'nearest')
+#            plt.colorbar()
+#            plt.show()
+
+
     def init_image(self):
         # Initialize Image
         self.ig = ImageGenerator(self.L_I)
@@ -317,6 +352,9 @@ class EMBurak:
             self.ig.plot()
 
 
+
+
+
     def init_particle_filter(self):
         # Define necessary components for the particle filter
         D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
@@ -327,6 +365,7 @@ class EMBurak:
         tp = PF.GaussTP(sdev, 2)
         lp = PoissonLP(self.L0, self.L1, self.DT, self.G, self.spike_energy)
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp)
+
 
     def SNR(self, S, S0):
         return np.var(S) / np.var(S - S0)
@@ -357,38 +396,6 @@ class EMBurak:
         plt.title('y coordinate')
         plt.show()
 
-    def set_gain_factor(self):
-        
-        self.G = 1.
-        self.t_S.set_value(np.ones_like(S))
-        Ips, FP = self.RFS(self.XR, self.YR, 
-                           self.L0, self.L1, 
-                           self.DT, self.G)
-        self.G = (1. / Ips.max()).astype('float32')
-        #Ips, FP = self.RFS(self.XR, self.YR, 
-        #                   self.L0, self.L1, 
-        #                   self.DT, self.G)
-        #if self.debug:
-        #    plt.title('Firing Probability Histogram')
-        #    plt.hist(FP.ravel())
-        #    plt.show()
-
-#        if self.debug:
-#            q = 0
-#            t = 1 * (self.N_T - 1)
-#            plt.subplot(1, 2, 1)
-#            plt.title('IPs at T = ' + str(t))
-#            plt.imshow( (1 / self.DT) * Ips[q, :, t].reshape(self.L_N, self.L_N), 
-#                       cmap = plt.cm.gray, 
-#                       interpolation = 'nearest')
-#            plt.colorbar()
-#            plt.subplot(1, 2, 2)
-#            plt.title('Original Image')
-#            plt.imshow(self.S.reshape(self.L_I, self.L_I), 
-#                       cmap = plt.cm.gray, 
-#                       interpolation = 'nearest')
-#            plt.colorbar()
-#            plt.show()
 
     def gen_spikes(self):
         self.R = self.spikes(self.XR, self.YR, self.L0, self.L1, self.DT, self.G)[0]
