@@ -573,9 +573,6 @@ if __name__ == '__main__':
     emb = EMBurak(_DC = 100., _DT = 0.001)
     emb.gen_data()
     emb.run()
-    pkl.dump(emb, open('whole_class.pkl', 'wb'))
-    
-
 
 
 #if __name__ == '__main__':
