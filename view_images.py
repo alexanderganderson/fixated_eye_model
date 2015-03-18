@@ -79,7 +79,7 @@ S_actual = gaussian_filter(S_actual, 0.5)
 
 N_T = paths['truthX'].shape[0]
 
-i = 2
+i = 19
 t = (i + 1) * N_T / 20
 
 S_est = images[i]

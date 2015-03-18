@@ -6,6 +6,7 @@ from utils.bounded_diffusion import Center
 import utils.particle_filter as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator
+from utils.SNR import SNR
 import matplotlib.pyplot as plt
 import cPickle as pkl
 
@@ -339,22 +340,6 @@ class EMBurak:
 #            plt.show()
 
 
-    def init_image(self):
-        # Initialize Image
-        self.ig = ImageGenerator(self.L_I)
-        self.ig.make_big_E()
-        #self.ig.random()
-        self.ig.smooth()
-        self.ig.normalize()
-        self.S = self.ig.img
-        self.t_S.set_value(self.S)
-        if (self.debug):
-            self.ig.plot()
-
-
-
-
-
     def init_particle_filter(self):
         # Define necessary components for the particle filter
         D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
@@ -367,8 +352,17 @@ class EMBurak:
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp)
 
 
-    def SNR(self, S, S0):
-        return np.var(S) / np.var(S - S0)
+    def init_image(self):
+        # Initialize Image
+        self.ig = ImageGenerator(self.L_I)
+        self.ig.make_big_E()
+        #self.ig.random()
+        self.ig.smooth()
+        self.ig.normalize()
+        self.S = self.ig.img
+        self.t_S.set_value(self.S)
+        if (self.debug):
+            self.ig.plot()
 
     def gen_path(self):
         """
@@ -436,7 +430,7 @@ class EMBurak:
         if (t > self.N_T):
             print 'Maximum simulated timesteps exceeded in E step'
         self.pf.run(self.R.transpose()[0:t], self.N_P)
-        print 'Path SNR ' + str(self.SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
+        print 'Path SNR ' + str(SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
     
     
     def reset_M_aux(self):
@@ -468,7 +462,7 @@ class EMBurak:
     
             print (str(E_R / t) + ' ' + 
                    str(E_rec / t) + ' ' +  
-                   str(self.SNR(self.S, self.t_S.get_value())))
+                   str(SNR(self.S, self.t_S.get_value())))
 
         
     def run_EM(self, N_itr = 20, N_g_itr = 5):
