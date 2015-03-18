@@ -133,6 +133,7 @@ class EMBurak:
         
         self.init_theano_vars()
         self.init_theano_funcs()
+        self.set_gain_factor()
         self.init_image()
         
         
@@ -142,7 +143,6 @@ class EMBurak:
         Generates a path and spikes
         """
         self.gen_path()
-        self.set_gain_factor()
         
         self.init_particle_filter()
         
@@ -360,35 +360,37 @@ class EMBurak:
         plt.show()
 
     def set_gain_factor(self):
+        
         self.G = 1.
+        self.t_S.set_value(np.ones_like(S))
         Ips, FP = self.RFS(self.XR, self.YR, 
                            self.L0, self.L1, 
                            self.DT, self.G)
         self.G = (1. / Ips.max()).astype('float32')
-        Ips, FP = self.RFS(self.XR, self.YR, 
-                           self.L0, self.L1, 
-                           self.DT, self.G)
-        if self.debug:
-            plt.title('Firing Probability Histogram')
-            plt.hist(FP.ravel())
-            plt.show()
+        #Ips, FP = self.RFS(self.XR, self.YR, 
+        #                   self.L0, self.L1, 
+        #                   self.DT, self.G)
+        #if self.debug:
+        #    plt.title('Firing Probability Histogram')
+        #    plt.hist(FP.ravel())
+        #    plt.show()
 
-        if self.debug:
-            q = 0
-            t = 1 * (self.N_T - 1)
-            plt.subplot(1, 2, 1)
-            plt.title('IPs at T = ' + str(t))
-            plt.imshow( (1 / self.DT) * Ips[q, :, t].reshape(self.L_N, self.L_N), 
-                       cmap = plt.cm.gray, 
-                       interpolation = 'nearest')
-            plt.colorbar()
-            plt.subplot(1, 2, 2)
-            plt.title('Original Image')
-            plt.imshow(self.S.reshape(self.L_I, self.L_I), 
-                       cmap = plt.cm.gray, 
-                       interpolation = 'nearest')
-            plt.colorbar()
-            plt.show()
+#        if self.debug:
+#            q = 0
+#            t = 1 * (self.N_T - 1)
+#            plt.subplot(1, 2, 1)
+#            plt.title('IPs at T = ' + str(t))
+#            plt.imshow( (1 / self.DT) * Ips[q, :, t].reshape(self.L_N, self.L_N), 
+#                       cmap = plt.cm.gray, 
+#                       interpolation = 'nearest')
+#            plt.colorbar()
+#            plt.subplot(1, 2, 2)
+#            plt.title('Original Image')
+#            plt.imshow(self.S.reshape(self.L_I, self.L_I), 
+#                       cmap = plt.cm.gray, 
+#                       interpolation = 'nearest')
+#            plt.colorbar()
+#            plt.show()
 
     def gen_spikes(self):
         self.R = self.spikes(self.XR, self.YR, self.L0, self.L1, self.DT, self.G)[0]
