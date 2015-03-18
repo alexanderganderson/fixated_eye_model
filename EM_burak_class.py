@@ -304,7 +304,7 @@ class EMBurak:
                                              updates = self.s_grad_updates)
 
         
-
+    
 
     def set_gain_factor(self):
         
@@ -547,10 +547,15 @@ class EMBurak:
         if self.debug:
             self.pf.plot(self.XR[0], self.YR[0], self.DT)
     
-    
+   
+    def calculate_inner_products(self):
+        """
+        Calculates the inner products used
+        """
+        self.Ips, self.FP = self.RFS(self.XR, self.YR, 
+                                     self.L0, self.L1, 
+                                     self.DT, self.G)
  
-
-
 
 #def main():
 if __name__ == '__main__':
