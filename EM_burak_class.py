@@ -1,3 +1,7 @@
+# Python script containing a class that does expectation maximization
+#   to estimate an image from simulated LGN cell responses
+# See the end of the script for a sample usage
+
 import numpy as np
 import theano
 import theano.tensor as T
@@ -11,7 +15,7 @@ import matplotlib.pyplot as plt
 import cPickle as pkl
 
 
-# For the particle filter module, we create this class for the emission probabilities
+# For the particle filter module, this class mediates the emission probabilities
 class PoissonLP(PF.LikelihoodPotential):
     """
     Poisson likelihood potential for use in the burak EM
@@ -62,19 +66,20 @@ class PoissonLP(PF.LikelihoodPotential):
         return np.exp(Es)
 
 
-
-
 class EMBurak:
     def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
                  _L_I = 14, _L_N = 18):
         """
-        Initializes all of the parameters and builds the relevant 
-             theano variables and functions. 
+        Initializes the parts of the EM algorithm
+            -- Sets all parameters
+            -- Defines relevant theano variables
+            -- Compiles theano functions
+            -- Sets the gain factor for the circuit
+            -- Initializes the Particle Filter Module
+            -- Initializes the Image
         """
 
         self.debug = False # If True, show debug images
-
-
 
         # Simulation Parameters
         self.DT = _DT # Simulation timestep
@@ -151,6 +156,7 @@ class EMBurak:
     def run(self):
         """
         Runs an iteration of EM
+        Then saves relevant summary information about the run
         """
         self.run_EM()
         self.save()
@@ -307,7 +313,10 @@ class EMBurak:
     
 
     def set_gain_factor(self):
-        
+        """
+        Sets the gain factor so that an image with pixels of intensity 1
+            results in spikes at the maximum firing rate
+        """
         self.G = 1.
         self.t_S.set_value(np.ones_like(self.S))
         Ips, FP = self.RFS(self.XR, self.YR, 
@@ -341,6 +350,9 @@ class EMBurak:
 
 
     def init_particle_filter(self):
+        """
+        Initializes the particle filter class
+        """
         # Define necessary components for the particle filter
         D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
         sdev = np.sqrt(self.DC * self.DT)
@@ -353,7 +365,9 @@ class EMBurak:
 
 
     def init_image(self):
-        # Initialize Image
+        """
+        Initialize the Image
+        """
         self.ig = ImageGenerator(self.L_I)
         self.ig.make_big_E()
         #self.ig.random()
@@ -366,7 +380,8 @@ class EMBurak:
 
     def gen_path(self):
         """
-        Generate a retinal path
+        Generate a retinal path. Note that the path has a bias towards the
+            center so that the image does not go too far out of range
         """
         self.c = Center(self.L_I, self.DC, self.DT)
         for b in range(self.N_B):
@@ -392,6 +407,9 @@ class EMBurak:
 
 
     def gen_spikes(self):
+        """
+        Generate LGN responses given the path and the image
+        """
         self.R = self.spikes(self.XR, self.YR, self.L0, self.L1, self.DT, self.G)[0]
         print 'Mean firing rate ' + str(self.R.mean() / self.DT)
 
@@ -399,6 +417,11 @@ class EMBurak:
 
 
     def true_costs(self):
+        """
+        Prints out the negative log-likelihood of the observed spikes given the
+            image and path that generated them
+        Note that the energy is normalized by the number of timesteps
+        """
         print 'Pre-EM testing'
         self.t_S.set_value(self.S)
         E, E_rec, E_R = self.costs(self.XR, self.YR, 
@@ -406,19 +429,17 @@ class EMBurak:
                                    self.L0, self.L1, 
                                    self.DT, self.G, 
                                    self.ALPHA)
-                                                  
+        # FIXME: what is the meaning of E here?         
         print 'Costs of underlying data ' + str((E/self.N_T, E_rec/self.N_T))
 
 
-    def reset_img_gpu(self):
+    def reset_image_estimate(self):
         """
         Resets the value of the image as stored on the GPU
-            also resets the auxillary variables for ada_delta
         """
-
         self.t_S.set_value(0.5 + np.zeros(self.S.shape).astype('float32'))
-        self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
-        self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
+        #self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
+        #self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
 
    
     def run_E(self, t):
@@ -474,7 +495,9 @@ class EMBurak:
         self.N_itr = N_itr
         self.N_g_itr = N_g_itr
         
-        self.reset_img_gpu()
+        self.reset_image_estimate()
+        self.reset_M_aux()
+        
         self.EM_imgs = {}
         self.EM_imgs['truth'] = self.S
         self.EM_paths = {}
@@ -498,6 +521,12 @@ class EMBurak:
             self.EM_imgs[u] = self.t_S.get_value()
 
     def save(self):
+        """
+        Saves information relevant to the EM run
+        images.pkl - dictionary of the image estimates at each iteration
+        paths.pkl - dictionary with path estimates at each iteration
+        params.pkl - dictionary of parameters of the model
+        """
         pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
         pkl.dump(self.EM_paths, open("paths.pkl", 'wb'))
         params = {}
@@ -515,6 +544,9 @@ class EMBurak:
 
 
     def plot_image_estimate(self):
+        """
+        Plot the estimated image against the actual image
+        """
         vmin = -1.
         vmax = 1.
         plt.subplot(1, 3, 1)
@@ -545,13 +577,10 @@ class EMBurak:
         Prints the costs associated with this step
         """
         self.reset_img_gpu()
-
         print 'Original Path, infer image'
         t = self.N_T
         self.run_M(t)
 
-
-    
 
     def true_image_infer_path_costs(self):
         print 'Original image, Infer Path'
@@ -573,12 +602,7 @@ class EMBurak:
                                      self.DT, self.G)
  
 
-#def main():
 if __name__ == '__main__':
     emb = EMBurak(_DC = 100., _DT = 0.001)
     emb.gen_data()
     emb.run()
-
-
-#if __name__ == '__main__':
-#    main()
