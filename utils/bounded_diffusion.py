@@ -32,7 +32,9 @@ class Center:
         
         self.mn = (self.m0 / self.s0 ** 2 + self.m1 / self.s1 ** 2) * self.sn ** 2
         while(True):
-            temp = self.mn + np.random.normal(size = 2, scale = self.sn)
+            # Note that for 2d diffusion, each component's variance is half the
+            #   variance of the overall step length
+            temp = self.mn + np.random.normal(size = 2, scale = self.sn / np.sqrt(2))
             if (temp[0] > - self.Lx / 2 
                 and temp[0] < self.Lx / 2 
                 and temp[1] > - self.Lx / 2 

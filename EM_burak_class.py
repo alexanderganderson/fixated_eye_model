@@ -371,7 +371,7 @@ class EMBurak:
         self.ig = ImageGenerator(self.L_I)
         self.ig.make_big_E()
         #self.ig.random()
-        self.ig.smooth()
+        #self.ig.smooth()
         self.ig.normalize()
         self.S = self.ig.img
         self.t_S.set_value(self.S)
