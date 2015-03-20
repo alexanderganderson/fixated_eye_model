@@ -603,6 +603,6 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 200., _DT = 0.001)
+    emb = EMBurak(_DC = 100., _DT = 0.001)
     emb.gen_data()
     emb.run()
