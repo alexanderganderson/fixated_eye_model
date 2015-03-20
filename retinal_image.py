@@ -53,7 +53,7 @@ for t in range(50):
     plt.imshow(R1[:, t].reshape(L_N, L_N),
                 interpolation = 'nearest', cmap = plt.cm.gray_r)
     plt.title('Exponential Moving Average of Spikes')
-    plt.savefig('img/img' + str(1000 + t) + '.png', dpi = 75)
+    plt.savefig('img/retinal_projection/img' + str(1000 + t) + '.png', dpi = 75)
 
 
 
