@@ -66,6 +66,13 @@ class ImageGenerator:
         self.img = self.img - self.img.min()
         self.img = self.img / self.img.max()
         
+    def variance_normalize(self):
+        """
+        Normalizes the image to have sum of squares = 1
+        """
+        
+        self.img = self.img / np.sqrt(np.sum(self.img ** 2))
+        
     def plot(self):
         plt.imshow(self.img, 
                    interpolation = 'nearest', 

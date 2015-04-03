@@ -13,6 +13,8 @@ from utils.image_gen import ImageGenerator
 from utils.SNR import SNR
 import matplotlib.pyplot as plt
 import cPickle as pkl
+from scipy.io import loadmat
+from collections import OrderedDict
 
 
 # For the particle filter module, this class mediates the emission probabilities
@@ -68,7 +70,7 @@ class PoissonLP(PF.LikelihoodPotential):
 
 class EMBurak:
     def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
-                 _L_I = 14, _L_N = 18):
+                 _L_I = 14, _L_N = 18, _N_L = 49):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -86,14 +88,20 @@ class EMBurak:
         self.DC = _DC  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
+        
+        # Image Prior parameters
         self.ALPHA  = 100. # Image Regularization
-        #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
+        self.LAMBDA  = 0. # Sparsity constant, set when loading dictionary
+        # the prior is 1/Img_var * ((S-DA) ** 2 + Alpha * |A|)
+
 
         self.N_T = _N_T # Number of time steps
         self.L_I = _L_I # Linear dimension of image
         self.L_N = _L_N # Linear dimension of neuron receptive field grid
+        self.N_L = _N_L # Number of sparse latent factors
+        
+        self.N_B = 1 # Number of batches of data (must be 1 for generating data)
 
-        self.N_B = 1 # Number of batches of data (must be 1)
 
         # EM Parameters
         # M - Parameters (ADADELTA)
@@ -108,8 +116,6 @@ class EMBurak:
         # Other Parameters
         self.N_Pix = self.L_I ** 2 # Number of pixels in image
         self.N_N = self.L_N ** 2 # Number of neurons
-        #self.N_L = self.N_Pix # Number of latent factors
-
 
         # Initialize pixel and LGN positions
         self.XS = np.arange(- self.L_I / 2, self.L_I / 2)
@@ -133,10 +139,10 @@ class EMBurak:
                             self.N_T)).astype('float32') # Y-Position of retina
         self.R = np.zeros((self.N_N, self.N_T)).astype('float32')  # Spikes (1 or 0)
         self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32') # Weighting for batches and time points
-        #self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  # Dictionary going from latent factors to image
-        #self.A = np.zeros((self.N_L,)).astype('float32')      # Sparse Coefficients
+        self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  # Dictionary going from latent factors to image
+        self.A = np.zeros((self.N_L,)).astype('float32')      # Sparse Coefficients
         
-        
+        self.init_dictionary()
         self.init_theano_vars()
         self.init_theano_funcs()
         self.set_gain_factor()
@@ -162,6 +168,16 @@ class EMBurak:
         self.save()
 
 
+    def init_dictionary(self):
+        """
+        Loads in a dictionary
+        Loads the given value of the sparsity penalty
+        """
+        data = loadmat('data/mnist_dictionary.mat')
+        self.D[:, :] = data['D']
+        self.LAMBDA = data['Alpha'] 
+
+
     def init_theano_vars(self):
         """
         Initializes all theano variables
@@ -178,8 +194,8 @@ class EMBurak:
         self.t_XR = T.matrix('XR')
         self.t_YR = T.matrix('YR')
         self.t_R = T.matrix('R')
-        #self.t_D = theano.shared(self.D, 'D1')
-        #self.t_A = theano.shared(self.A, 'A')
+        self.t_D = theano.shared(self.D, 'D')
+        self.t_A = theano.shared(self.A, 'A')
 
         self.t_Wbt = T.matrix('Wbt')
 
@@ -189,7 +205,7 @@ class EMBurak:
         self.t_DT = T.scalar('DT')
         self.t_DC = T.scalar('DC')
         self.t_ALPHA = T.scalar('ALPHA')
-        #self.t_BETA = T.scalar('BETA')
+        self.t_LAMBDA = T.scalar('LAMBDA')
         self.t_G = T.scalar('G')
 
         # Take dot product of image with an array of gaussians
@@ -238,14 +254,25 @@ class EMBurak:
                                + (1 - self.t_R.dimshuffle('x', 0, 1)) * T.log(1 - self.t_FP), axis = 1) * self.t_Wbt)
         self.t_E_R.name = 'E_R'
 
-        self.t_E_rec = self.t_ALPHA * (
-                            T.mean((self.t_S - 0.5) ** 2) + 
-                            T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
-                            T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0))
-                            )
+        #self.t_E_rec = self.t_ALPHA * (
+        #                    T.mean((self.t_S - 0.5) ** 2) + 
+        #                    T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
+        #                    T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0))
+        #                    )
+        
+        # Image prior
+        self.t_E_rec = (
+                      self.t_ALPHA * 
+                      ( 
+                      T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
+                      T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0)) +
+                      T.sum((self.t_S.flatten() - self.t_A * self.t_D) ** 2) 
+                      )
+        self.t_E_sp =  self.t_ALPHA * self.t_LAMBDA * T.sum(T.abs_(self.t_A)))
+        
         self.t_E_rec.name = 'E_rec'
 
-        self.t_E = self.t_E_rec + self.t_E_R
+        self.t_E = self.t_E_rec + self.t_E_R + self.t_E_sp
         self.t_E.name = 'E'
 
         # Auxiliary Theano Variables
@@ -277,9 +304,9 @@ class EMBurak:
                                                self.t_R, self.t_Wbt,
                                                self.t_L0, self.t_L1, 
                                                self.t_DT, self.t_G, 
-                                               self.t_ALPHA],
+                                               self.t_ALPHA, self.t_LAMBDA],
                                      outputs = [self.t_E, self.t_E_rec, 
-                                                self.t_E_R])
+                                                self.t_E_sp, self.t_E_R])
 
 
         # Returns the energy E_R = -log P(r|x,s) separated by batches
@@ -300,14 +327,27 @@ class EMBurak:
         self.s_grad_updates = ada_delta(self.t_E, self.t_S, *self.t_ada_params)
         self.t_S_Eg2, self.t_S_EdS2, _ = self.s_grad_updates.keys()
 
-        self.img_grad = theano.function(inputs = [self.t_XR, self.t_YR,
-                                             self.t_R, self.t_Wbt,
-                                             self.t_L0, self.t_L1, 
-                                             self.t_DT, self.t_G, 
-                                             self.t_ALPHA,
-                                             self.t_Rho, self.t_Eps],
-                                             outputs = [self.t_E, self.t_E_rec, self.t_E_R],
-                                             updates = self.s_grad_updates)
+        self.a_grad_updates = ada_delta(self.t_E, self.t_A, *self.t_ada_params)
+        self.t_A_Eg2, self.t_A_EdS2, _ = self.a_grad_updates.keys()
+
+
+        self.grad_updates = OrderedDict()
+        
+        for key in self.s_grad_updates.keys():
+            self.grad_updates[key] = s_grad_updates[key]
+        for key in self.a_grad_updates.keys():
+            self.grad_updates[key] = a_grad_updates[key]
+
+        self.img_grad = theano.function(
+                       inputs = [self.t_XR, self.t_YR,
+                                self.t_R, self.t_Wbt,
+                                self.t_L0, self.t_L1, 
+                                self.t_DT, self.t_G, 
+                                self.t_ALPHA, self.t_LAMBDA
+                                self.t_Rho, self.t_Eps],
+                       outputs = [self.t_E, self.t_E_rec, 
+                                 self.t_E_sp, self.t_E_R],
+                       updates = self.grad_updates)
 
         
     
@@ -399,7 +439,7 @@ class EMBurak:
         """
         print 'Pre-EM testing'
         self.t_S.set_value(self.S)
-        E, E_rec, E_R = self.costs(self.XR, self.YR, 
+        E, E_rec, E_sp, E_R = self.costs(self.XR, self.YR, 
                                    self.R, self.Wbt, 
                                    self.L0, self.L1, 
                                    self.DT, self.G, 
@@ -413,6 +453,7 @@ class EMBurak:
         Resets the value of the image as stored on the GPU
         """
         self.t_S.set_value(0.5 + np.zeros(self.S.shape).astype('float32'))
+        self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
         #self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
         #self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
 
@@ -436,7 +477,8 @@ class EMBurak:
         """
         self.t_S_Eg2.set_value(np.zeros_like(self.S).astype('float32'))
         self.t_S_EdS2.set_value(np.zeros_like(self.S).astype('float32'))
-        
+        self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
     
     def run_M(self, t, N_g_itr = 5):
         """
@@ -446,9 +488,9 @@ class EMBurak:
         result is saved in t_S.get_value()
         """
         self.reset_M_aux()
-        print 'Spike Energy / t | Reg. Energy / t | SNR' 
+        print 'Spike Energy / t | Reg. Energy / t | Sp Energy / t | SNR' 
         for v in range(N_g_itr):
-            E, E_rec, E_R = self.img_grad(
+            E, E_rec, E_sp, E_R = self.img_grad(
                        self.pf.XS[:, :, 0].transpose()[:, 0:t],
                        self.pf.XS[:, :, 1].transpose()[:, 0:t],
                        self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
@@ -458,6 +500,7 @@ class EMBurak:
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
                    str(E_rec / t) + ' ' +  
+                   str(E_sp) / t) + ' ' +
                    str(self.img_SNR))
 
         
