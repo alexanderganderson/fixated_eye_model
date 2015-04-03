@@ -388,6 +388,7 @@ class EMBurak:
         #self.ig.random()
         #self.ig.smooth()
         self.ig.normalize()
+        self.ig.variance_normalize()
         self.S = self.ig.img
         self.t_S.set_value(self.S)
         if (self.debug):
@@ -624,4 +625,4 @@ class EMBurak:
 if __name__ == '__main__':
     emb = EMBurak(_DC = 100., _DT = 0.001)
     emb.gen_data()
-    emb.run()
+    #emb.run()
