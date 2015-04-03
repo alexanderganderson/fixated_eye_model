@@ -175,7 +175,7 @@ class EMBurak:
         """
         data = loadmat('data/mnist_dictionary.mat')
         self.D[:, :] = data['D']
-        self.LAMBDA = data['Alpha'] 
+        self.LAMBDA = data['Alpha'].astype('float32')
 
 
     def init_theano_vars(self):
