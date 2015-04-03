@@ -175,7 +175,7 @@ class EMBurak:
         """
         data = loadmat('data/mnist_dictionary.mat')
         self.D[:, :] = data['D']
-        self.LAMBDA = data['Alpha'].astype('float32')
+        self.LAMBDA = data['Alpha'].astype('float32')[0, 0]
 
 
     def init_theano_vars(self):
@@ -266,11 +266,11 @@ class EMBurak:
                       ( 
                       T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
                       T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0)) +
-                      T.sum((self.t_S.flatten() - self.t_A * self.t_D) ** 2) 
+                          T.sum((self.t_S.flatten() - T.dot(self.t_A, self.t_D) ) ** 2) 
                       ))
 
         self.t_E_sp =  self.t_ALPHA * self.t_LAMBDA * T.sum(T.abs_(self.t_A))
-        
+        self.t_E_sp.name = 'E_sp'
         self.t_E_rec.name = 'E_rec'
 
         self.t_E = self.t_E_rec + self.t_E_R + self.t_E_sp
