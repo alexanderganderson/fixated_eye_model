@@ -145,11 +145,11 @@ class EMBurak:
         self.init_dictionary()
         self.init_theano_vars()
         self.init_theano_funcs()
-        self.set_gain_factor()
+        #self.set_gain_factor()
         self.init_particle_filter()
         
         self.init_image()
-        
+        self.set_gain_factor()
 
     def gen_data(self):
         """
@@ -357,13 +357,17 @@ class EMBurak:
         """
         Sets the gain factor so that an image with pixels of intensity 1
             results in spikes at the maximum firing rate
+        Adjusted to use the max of the image pixels S instead of 1
         """
+
         self.G = 1.
-        self.t_S.set_value(np.ones_like(self.S))
+        self.t_S.set_value(np.ones_like(self.S) * np.max(self.S))
         Ips, FP = self.RFS(self.XR, self.YR, 
                            self.L0, self.L1, 
                            self.DT, self.G)
         self.G = (1. / Ips.max()).astype('float32')
+        self.t_S.set_value(self.S)
+
 
     def init_particle_filter(self):
         """
@@ -497,7 +501,7 @@ class EMBurak:
                        self.pf.XS[:, :, 1].transpose()[:, 0:t],
                        self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
                        self.L0, self.L1, self.DT, 
-                       self.G, 0.5 * self.ALPHA * t / self.N_T,
+                       self.G, self.ALPHA, self.LAMBDA
                        self.Rho, self.Eps)
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
@@ -597,7 +601,7 @@ class EMBurak:
         Infers the image given the true path
         Prints the costs associated with this step
         """
-        self.reset_img_gpu()
+        self.reset_image_estimate()
         print 'Original Path, infer image'
         t = self.N_T
         self.run_M(t)
