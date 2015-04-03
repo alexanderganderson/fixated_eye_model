@@ -539,6 +539,7 @@ class EMBurak:
         params['N_T'] = self.N_T
         params['N_itr'] = self.N_itr
         params['N_g_itr'] = self.N_g_itr
+        params['IMAGE'] = self.ig.img
         pkl.dump(params, open("params.pkl", 'wb'))
 
 

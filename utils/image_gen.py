@@ -5,7 +5,7 @@
 import numpy as np
 from scipy.signal import convolve2d
 import matplotlib.pyplot as plt
-
+from scipy.io import loadmat
 
 class ImageGenerator:
     def __init__(self, _L_I):
@@ -20,7 +20,17 @@ class ImageGenerator:
         
     def dot(self):
         self.img[self.L_I / 2, self.L_I / 2] = 1.
-        
+    
+    
+    def make_digit(self):
+        data = loadmat('../data/mnist_small.mat')
+        IMAGES = data['IMAGES']
+        K, self.L_I, _ = IMAGES.shape
+        k = np.random.randint(K)
+        self.reset_img()
+        self.img[:, :] = IMAGES[k]
+    
+    
     def make_E(self):
         self.img[1, 2:-1] = 1
         self.img[self.L_I / 2, 2:-1] = 1
