@@ -267,8 +267,9 @@ class EMBurak:
                       T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
                       T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0)) +
                       T.sum((self.t_S.flatten() - self.t_A * self.t_D) ** 2) 
-                      )
-        self.t_E_sp =  self.t_ALPHA * self.t_LAMBDA * T.sum(T.abs_(self.t_A)))
+                      ))
+
+        self.t_E_sp =  self.t_ALPHA * self.t_LAMBDA * T.sum(T.abs_(self.t_A))
         
         self.t_E_rec.name = 'E_rec'
 
@@ -334,16 +335,16 @@ class EMBurak:
         self.grad_updates = OrderedDict()
         
         for key in self.s_grad_updates.keys():
-            self.grad_updates[key] = s_grad_updates[key]
+            self.grad_updates[key] = self.s_grad_updates[key]
         for key in self.a_grad_updates.keys():
-            self.grad_updates[key] = a_grad_updates[key]
+            self.grad_updates[key] = self.a_grad_updates[key]
 
         self.img_grad = theano.function(
                        inputs = [self.t_XR, self.t_YR,
                                 self.t_R, self.t_Wbt,
                                 self.t_L0, self.t_L1, 
                                 self.t_DT, self.t_G, 
-                                self.t_ALPHA, self.t_LAMBDA
+                                self.t_ALPHA, self.t_LAMBDA,
                                 self.t_Rho, self.t_Eps],
                        outputs = [self.t_E, self.t_E_rec, 
                                  self.t_E_sp, self.t_E_R],
@@ -501,7 +502,7 @@ class EMBurak:
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
                    str(E_rec / t) + ' ' +  
-                   str(E_sp) / t) + ' ' +
+                   str(E_sp / t) + ' ' +
                    str(self.img_SNR))
 
         
