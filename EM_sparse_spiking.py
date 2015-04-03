@@ -501,7 +501,7 @@ class EMBurak:
                        self.pf.XS[:, :, 1].transpose()[:, 0:t],
                        self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
                        self.L0, self.L1, self.DT, 
-                       self.G, self.ALPHA, self.LAMBDA
+                       self.G, self.ALPHA, self.LAMBDA,
                        self.Rho, self.Eps)
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
