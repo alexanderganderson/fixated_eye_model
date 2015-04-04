@@ -106,7 +106,7 @@ class EMBurak:
         # EM Parameters
         # M - Parameters (ADADELTA)
         self.Rho = 0.4
-        self.Eps = 0.001
+        self.Eps = 0.000001
         self.N_g_itr = 5
         self.N_itr = 20
 
@@ -494,7 +494,7 @@ class EMBurak:
         result is saved in t_S.get_value()
         """
         self.reset_M_aux()
-        print 'Spike Energy / t | Reg. Energy / t | Sp Energy / t | SNR' 
+        print 'Spike Energy / t | Reg. Energy | Sp Energy | SNR' 
         for v in range(N_g_itr):
             E, E_rec, E_sp, E_R = self.img_grad(
                        self.pf.XS[:, :, 0].transpose()[:, 0:t],
@@ -505,8 +505,8 @@ class EMBurak:
                        self.Rho, self.Eps)
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
-                   str(E_rec / t) + ' ' +  
-                   str(E_sp / t) + ' ' +
+                   str(E_rec) + ' ' +  
+                   str(E_sp) + ' ' +
                    str(self.img_SNR))
 
         
@@ -628,6 +628,6 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 100., _DT = 0.001)
+    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
     emb.gen_data()
-    #emb.run()
+    emb.run_EM(N_g_itr = 40)
