@@ -26,7 +26,8 @@ class ImageGenerator:
         data = loadmat('../data/mnist_small.mat')
         IMAGES = data['IMAGES']
         K, self.L_I, _ = IMAGES.shape
-        k = np.random.randint(K)
+        #k = np.random.randint(K)
+        k = 37 # Chose a particular image that will work well
         self.reset_img()
         self.img[:, :] = IMAGES[k]
     
