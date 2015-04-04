@@ -457,7 +457,8 @@ class EMBurak:
         """
         Resets the value of the image as stored on the GPU
         """
-        self.t_S.set_value(0.5 + np.zeros(self.S.shape).astype('float32'))
+        self.t_S.set_value(0.5 * np.max(self.S).astype('float32')
+                           + np.zeros(self.S.shape).astype('float32'))
         self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
         #self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
         #self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
