@@ -41,9 +41,11 @@ def plot_image_estimate(S_actual, S_est, XY_act, est_mean, est_sdev, params):
     est_sdev - sdev of estimated path
     params - dictionary of parameters
     """    
+    m1 = np.min(S_actual)
+    m2 = np.max(S_actual)
     
-    vmin = -0.1
-    vmax = 1 + 0.1
+    vmin = -0.1 * (m2 - m1) + m1
+    vmax = m2 + 0.1 * (m2 - m1)
     
     N_T = params['N_T']
     
