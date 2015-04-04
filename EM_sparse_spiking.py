@@ -145,9 +145,7 @@ class EMBurak:
         self.init_dictionary()
         self.init_theano_vars()
         self.init_theano_funcs()
-        #self.set_gain_factor()
-        self.init_particle_filter()
-        
+        self.init_particle_filter()        
         self.init_image()
         self.set_gain_factor()
 
@@ -389,7 +387,8 @@ class EMBurak:
         Initialize the Image
         """
         self.ig = ImageGenerator(self.L_I)
-        self.ig.make_big_E()
+        #self.ig.make_big_E()
+        self.ig.make_digit()
         #self.ig.random()
         #self.ig.smooth()
         self.ig.normalize()

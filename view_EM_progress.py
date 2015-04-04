@@ -103,7 +103,7 @@ for i in range(N_itr):
     est_sdevs = paths[(i, 'sdevs')]
 
     plot_image_estimate(S_actual, S_est, XY_act, est_mean, est_sdevs, params)
-    plt.savefig('img/EM_est/img' + str(100 + i) + '.png', dpi = 100)
+    plt.savefig('img/EM_est_prior/img' + str(100 + i) + '.png', dpi = 100)
     plt.clf()
 
 # After running, go to image directory and run
