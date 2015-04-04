@@ -631,3 +631,4 @@ if __name__ == '__main__':
     emb = EMBurak(_DC = 1., _DT = 0.004, _N_T = 100, _ALPHA = 1.)
     emb.gen_data()
     emb.run_EM(N_g_itr = 30)
+    emb.save()

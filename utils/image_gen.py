@@ -23,7 +23,7 @@ class ImageGenerator:
     
     
     def make_digit(self):
-        data = loadmat('../data/mnist_small.mat')
+        data = loadmat('data/mnist_small.mat')
         IMAGES = data['IMAGES']
         K, self.L_I, _ = IMAGES.shape
         #k = np.random.randint(K)
