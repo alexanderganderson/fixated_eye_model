@@ -70,7 +70,7 @@ class PoissonLP(PF.LikelihoodPotential):
 
 class EMBurak:
     def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
-                 _L_I = 14, _L_N = 18, _N_L = 49):
+                 _L_I = 14, _L_N = 18, _N_L = 49, _ALPHA = 50):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -90,7 +90,7 @@ class EMBurak:
         self.L1 = 100.
         
         # Image Prior parameters
-        self.ALPHA  = 100. # Image Regularization
+        self.ALPHA  = _ALPHA # Image Regularization
         self.LAMBDA  = 0. # Sparsity constant, set when loading dictionary
         # the prior is 1/Img_var * ((S-DA) ** 2 + Alpha * |A|)
 
@@ -628,6 +628,6 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
+    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100, _ALPHA = 50.)
     emb.gen_data()
     emb.run_EM(N_g_itr = 40)
