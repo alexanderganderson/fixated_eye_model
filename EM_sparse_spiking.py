@@ -509,7 +509,7 @@ class EMBurak:
                    str(self.img_SNR))
 
         
-    def run_EM(self, N_itr = 20, N_g_itr = 5):
+    def run_EM(self, N_itr = 20, N_g_itr = 10):
         """
         Runs full expectation maximization algorithm
         N_itr - number of iterations of EM
@@ -529,6 +529,7 @@ class EMBurak:
         
         
         print 'Running full EM'
+        N_g_itr_temp = N_g_itr
         for u in range(N_itr):
             #t = self.N_T
             t = self.N_T * (u + 1) / N_itr
@@ -540,7 +541,9 @@ class EMBurak:
             self.EM_paths[(u, 'sdevs')] = self.pf.sdevs
             
             # Run M step
-            self.run_M(t, N_g_itr = N_g_itr)
+            if (u > 5):
+                N_g_itr_temp = N_g_itr / 4
+            self.run_M(t, N_g_itr = N_g_itr_temp)
             self.EM_imgs[u] = self.t_S.get_value()
 
     def save(self):
@@ -627,7 +630,7 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 1., _DT = 0.004, _N_T = 100, _ALPHA = 1.)
+    emb = EMBurak(_DC = 50., _DT = 0.002, _N_T = 100, _ALPHA = 1.)
     emb.gen_data()
     emb.run_EM(N_g_itr = 30)
     emb.save()
