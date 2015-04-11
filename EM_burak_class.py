@@ -13,7 +13,7 @@ from utils.image_gen import ImageGenerator
 from utils.SNR import SNR
 import matplotlib.pyplot as plt
 import cPickle as pkl
-
+from scipy.io import savemat
 
 # For the particle filter module, this class mediates the emission probabilities
 class PoissonLP(PF.LikelihoodPotential):
@@ -577,8 +577,18 @@ class EMBurak:
                                      self.L0, self.L1, 
                                      self.DT, self.G)
  
+    def save_spikes(self, filename):
+        """
+        Saves a .mat file with the spikes and some other summary data
+        """
+        savemat(filename, {'R': self.R, 
+                           'N_T': self.N_T,
+                           'DT': self.DT,
+                           'DC': self.DC})
+
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 100., _DT = 0.001)
+    emb = EMBurak(_DC = 100., _DT = 0.001, _N_T = 1000)
     emb.gen_data()
-    emb.run()
+    emb.save_spikes('spikes2.mat')
+#    emb.run()
