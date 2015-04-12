@@ -23,15 +23,19 @@ class ImageGenerator:
     
     
     def make_digit(self):
-        data = loadmat('data/mnist_small.mat')
-        IMAGES = data['IMAGES']
-        K, self.L_I, _ = IMAGES.shape
-        #k = np.random.randint(K)
-        k = 37 # Chose a particular image that will work well
-        self.reset_img()
-        self.img[:, :] = IMAGES[k]
-    
-    
+        try:
+            data = loadmat('data/mnist_small1.mat')
+            IMAGES = data['IMAGES']
+            K, self.L_I, _ = IMAGES.shape
+            #k = np.random.randint(K)
+            k = 37 # Chose a particular image that will work well
+            self.reset_img()
+            self.img[:, :] = IMAGES[k]
+        except IOError, e:
+            print e
+            print 'MNIST file not found, making big E instead'
+            self.make_big_E()
+            
     def make_E(self):
         self.img[1, 2:-1] = 1
         self.img[self.L_I / 2, 2:-1] = 1
