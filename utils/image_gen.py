@@ -35,7 +35,36 @@ class ImageGenerator:
             print e
             print 'MNIST file not found, making big E instead'
             self.make_big_E()
-            
+    
+    def make_gabor(self, x0 = 0., y0 = 0., k = None,
+                   eta = np.pi / 4., phi = 0., sig = None):
+        """
+        Make a Gabor 
+        x0, y0 - gabor center relative to the center of the image
+        k = frequency amplitude
+        eta - frequency angle
+        phi - phase
+        img(x,y) = A * Exp( -((x-x0)^2 + (y-y0)^2)/sig ** 2) * Cos(kx + phi)
+        kx = k (cos eta, sin eta) * (x, y)
+        """
+        
+        if (k == None):
+            k = 4. * np.pi / self.L_I
+        if (sig == None):
+            sig = self.L_I / 3.
+        
+        
+        tmp = np.arange(-self.L_I / 2, self.L_I / 2)
+        X, Y = np.meshgrid(tmp, tmp)
+        
+        k1 = k * np.cos(eta)
+        k2 = k * np.sin(eta)
+        
+        self.img = (np.exp( -((X - x0) ** 2 + (Y - y0) ** 2) / sig ** 2 ) *
+                    np.sin(phi + k1 * X + k2 * Y))
+        
+        self.normalize()    
+    
     def make_E(self):
         self.img[1, 2:-1] = 1
         self.img[self.L_I / 2, 2:-1] = 1
@@ -64,12 +93,15 @@ class ImageGenerator:
         F = np.exp(-(Xg ** 2 + Yg ** 2) / sig ** 2).astype('float32')
         self.img = convolve2d(self.img, F, mode = 'same')
         
-    def normalize(self):
+    def normalize(self, m1 = 0., m2 = 1.):
         """
-        Normalizes the image to have min 0, max 1
+        Normalizes the image to have min = m1, max = m2
         """
         self.img = self.img - self.img.min()
         self.img = self.img / self.img.max()
+        
+        self.img = self.img * (m2 - m1) + m1
+        
         
     def variance_normalize(self):
         """
@@ -80,8 +112,11 @@ class ImageGenerator:
         
     def plot(self):
         plt.imshow(self.img, 
-                   interpolation = 'nearest', 
+                   #interpolation = 'nearest', 
                    cmap = plt.cm.gray_r)
         plt.colorbar()
         plt.title('Image')
         plt.show()
+
+if __name__ == '__main__':
+    ig = ImageGenerator(14)

@@ -495,6 +495,44 @@ class EMBurak:
             self.run_M(t, N_g_itr = N_g_itr)
             self.EM_imgs[u] = self.t_S.get_value()
 
+    def build_data_dict(self):
+        """
+        Creates a dictionary, self.data, that has all of the parameters of the model
+        """
+        
+        data = {}
+        data['DT'] = self.DT
+        data['DC'] = self.DC
+        data['L0'] = self.L0
+        data['L1'] = self.L1
+        data['ALPHA'] = self.ALPHA
+        
+        data['N_T'] = self.N_T
+        data['L_I'] = self.L_I
+        data['L_N'] = self.L_N
+        
+        data['Rho'] = self.Rho
+        data['Eps'] = self.Eps
+
+        data['N_g_itr'] = self.N_g_itr
+        data['N_itr'] = self.N_itr
+
+        data['N_P'] = self.N_P
+
+        data['XS'] = self.XS
+        data['YS'] = self.YS
+        data['XE'] = self.XE
+        data['YE'] = self.YE
+        data['Var'] = self.Var
+        data['G'] = self.G
+
+        data['XR'] = self.XR
+        data['YR'] = self.YR
+
+        data['S'] = self.S
+        
+        self.params = params
+        
     def save(self):
         """
         Saves information relevant to the EM run
@@ -504,18 +542,10 @@ class EMBurak:
         """
         pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
         pkl.dump(self.EM_paths, open("paths.pkl", 'wb'))
-        params = {}
-        params['DC'] = self.DC
-        params['DT'] = self.DT
-        params['L_I'] = self.L_I
-        params['L_N'] = self.L_N
-        params['L0'] = self.L0
-        params['L1'] = self.L1
-        params['N_T'] = self.N_T
-        params['N_itr'] = self.N_itr
-        params['N_g_itr'] = self.N_g_itr
-        params['IMAGE'] = self.ig.img
-        pkl.dump(params, open("params.pkl", 'wb'))
+        
+        self.build_data_dict()
+        
+        pkl.dump(self.params, open("params.pkl", 'wb'))
 
 
 
