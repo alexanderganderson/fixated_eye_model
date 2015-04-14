@@ -88,6 +88,7 @@ class EMBurak:
         self.L1 = 100.
         self.ALPHA  = 100. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
+        self.GAMMA = 100. # Pixel out of bounds cost parameter
 
         self.N_T = _N_T # Number of time steps
         self.L_I = _L_I # Linear dimension of image
@@ -151,6 +152,7 @@ class EMBurak:
         """
         self.gen_path()
         self.gen_spikes()
+        self.build_param_and_data_dict()
         
              
     def run(self):
@@ -190,6 +192,7 @@ class EMBurak:
         self.t_DC = T.scalar('DC')
         self.t_ALPHA = T.scalar('ALPHA')
         #self.t_BETA = T.scalar('BETA')
+        self.t_GAMMA = T.scalar('GAMMA')
         self.t_G = T.scalar('G')
 
         # Take dot product of image with an array of gaussians
@@ -238,11 +241,12 @@ class EMBurak:
                                + (1 - self.t_R.dimshuffle('x', 0, 1)) * T.log(1 - self.t_FP), axis = 1) * self.t_Wbt)
         self.t_E_R.name = 'E_R'
 
-        self.t_E_rec = self.t_ALPHA * (
-                            T.mean((self.t_S - 0.5) ** 2) + 
-                            T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
-                            T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0))
-                            )
+        self.t_E_rec = (self.t_ALPHA * T.mean((self.t_S - 0.5) ** 2) + 
+                        self.t_GAMMA * (T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) + 
+                                        T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0)))
+                        )
+                            
+                            
         self.t_E_rec.name = 'E_rec'
 
         self.t_E = self.t_E_rec + self.t_E_R
@@ -277,7 +281,7 @@ class EMBurak:
                                                self.t_R, self.t_Wbt,
                                                self.t_L0, self.t_L1, 
                                                self.t_DT, self.t_G, 
-                                               self.t_ALPHA],
+                                               self.t_ALPHA, self.t_GAMMA],
                                      outputs = [self.t_E, self.t_E_rec, 
                                                 self.t_E_R])
 
@@ -304,7 +308,7 @@ class EMBurak:
                                              self.t_R, self.t_Wbt,
                                              self.t_L0, self.t_L1, 
                                              self.t_DT, self.t_G, 
-                                             self.t_ALPHA,
+                                             self.t_ALPHA, self.t_GAMMA,
                                              self.t_Rho, self.t_Eps],
                                              outputs = [self.t_E, self.t_E_rec, self.t_E_R],
                                              updates = self.s_grad_updates)
@@ -389,8 +393,6 @@ class EMBurak:
         print 'Mean firing rate ' + str(self.R.mean() / self.DT)
 
 
-
-
     def true_costs(self):
         """
         Prints out the negative log-likelihood of the observed spikes given the
@@ -403,7 +405,7 @@ class EMBurak:
                                    self.R, self.Wbt, 
                                    self.L0, self.L1, 
                                    self.DT, self.G, 
-                                   self.ALPHA)
+                                   self.ALPHA, self.GAMMA)
         # FIXME: what is the meaning of E here?         
         print 'Costs of underlying data ' + str((E/self.N_T, E_rec/self.N_T))
 
@@ -413,8 +415,6 @@ class EMBurak:
         Resets the value of the image as stored on the GPU
         """
         self.t_S.set_value(0.5 + np.zeros(self.S.shape).astype('float32'))
-        #self.t_S_Eg2.set_value(np.zeros(self.S.shape).astype('float32'))
-        #self.t_S_EdS2.set_value(np.zeros(self.S.shape).astype('float32'))
 
    
     def run_E(self, t):
@@ -453,7 +453,7 @@ class EMBurak:
                        self.pf.XS[:, :, 1].transpose()[:, 0:t],
                        self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
                        self.L0, self.L1, self.DT, 
-                       self.G, 0.5 * self.ALPHA * t / self.N_T,
+                       self.G, 0.5 * self.ALPHA * t / self.N_T, self.GAMMA
                        self.Rho, self.Eps)
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
@@ -466,36 +466,39 @@ class EMBurak:
         Runs full expectation maximization algorithm
         N_itr - number of iterations of EM
         N_g_itr - number of gradient steps in M step
+        Saves summary of run info in self.data 
+        Note running twice will overwrite this run info
         """
+        
         self.N_itr = N_itr
         self.N_g_itr = N_g_itr
         
         self.reset_image_estimate()
-        self.reset_M_aux()
-        
-        self.EM_imgs = {}
-        self.EM_imgs['truth'] = self.S
-        self.EM_paths = {}
-        self.EM_paths['truthX'] = self.XR[0]
-        self.EM_paths['truthY'] = self.YR[0]
-        
-        
+            
+        EM_data = {}
+    
         print 'Running full EM'
         for u in range(N_itr):
-            #t = self.N_T
-            t = self.N_T * (u + 1) / N_itr
+            t = self.N_T * (u + 1) / N_itr #t = self.N_T
             print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
             
             # Run E step
             self.run_E(t)
-            self.EM_paths[(u, 'means')] = self.pf.means
-            self.EM_paths[(u, 'sdevs')] = self.pf.sdevs
             
             # Run M step
             self.run_M(t, N_g_itr = N_g_itr)
-            self.EM_imgs[u] = self.t_S.get_value()
+            
+            iteration_data = {}
+            iteration_data['time_steps'] = t
+            iteration_data['path_means'] = self.pf.means
+            iteration_data['path_sdevs'] = self.pf.sdevs
+            iteration_data['image_est'] = self.t_S.get_value()
 
-    def build_data_dict(self):
+            EM_data[u] = iteration_data
+            
+        self.data['EM_data'] = EM_data
+
+    def build_param_and_data_dict(self):
         """
         Creates a dictionary, self.data, that has all of the parameters of the model
         """
@@ -506,6 +509,7 @@ class EMBurak:
         data['L0'] = self.L0
         data['L1'] = self.L1
         data['ALPHA'] = self.ALPHA
+        data['GAMMA'] = self.GAMMA
         
         data['N_T'] = self.N_T
         data['L_I'] = self.L_I
@@ -531,22 +535,16 @@ class EMBurak:
 
         data['S'] = self.S
         
-        self.params = params
+        self.data = data
+
         
     def save(self):
         """
         Saves information relevant to the EM run
-        images.pkl - dictionary of the image estimates at each iteration
-        paths.pkl - dictionary with path estimates at each iteration
-        params.pkl - dictionary of parameters of the model
-        """
-        pkl.dump(self.EM_imgs, open("images.pkl", 'wb'))
-        pkl.dump(self.EM_paths, open("paths.pkl", 'wb'))
-        
-        self.build_data_dict()
-        
-        pkl.dump(self.params, open("params.pkl", 'wb'))
-
+        data.pkl - saves dictionary with all data relevant to EM run
+        (Only includes dict for EM data if that was run)
+        """        
+        pkl.dump(self.data, open("data.pkl", 'wb'))
 
 
     def plot_image_estimate(self):
@@ -618,7 +616,7 @@ class EMBurak:
 
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 100., _DT = 0.001, _N_T = 1000)
+    emb = EMBurak(_DC = 100., _DT = 0.001, _N_T = 200)
     emb.gen_data()
-    emb.save_spikes('spikes2.mat')
+    #emb.save_spikes('spikes2.mat')
 #    emb.run()
