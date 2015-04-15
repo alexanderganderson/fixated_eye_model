@@ -545,7 +545,7 @@ class EMBurak:
         data.pkl - saves dictionary with all data relevant to EM run
         (Only includes dict for EM data if that was run)
         """        
-        pkl.dump(self.data, open("data.pkl", 'wb'))
+        pkl.dump(self.data, open("output/data.pkl", 'wb'))
 
 
     def plot_image_estimate(self):
