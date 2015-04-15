@@ -86,7 +86,7 @@ class EMBurak:
         self.DC = _DC  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
-        self.ALPHA  = 100. # Image Regularization
+        self.ALPHA  = 0. # Image Regularization
         #self.BETA   = 100 # Pixel out of bounds cost param (pixels in 0,1)
         self.GAMMA = 100. # Pixel out of bounds cost parameter
 
@@ -453,7 +453,7 @@ class EMBurak:
                        self.pf.XS[:, :, 1].transpose()[:, 0:t],
                        self.R[:, 0:t], self.pf.WS.transpose()[:, 0:t],
                        self.L0, self.L1, self.DT, 
-                       self.G, 0.5 * self.ALPHA * t / self.N_T, self.GAMMA
+                       self.G, 0.5 * self.ALPHA * t / self.N_T, self.GAMMA,
                        self.Rho, self.Eps)
             self.img_SNR = SNR(self.S, self.t_S.get_value())
             print (str(E_R / t) + ' ' + 
@@ -616,7 +616,7 @@ class EMBurak:
 
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 100., _DT = 0.001, _N_T = 200)
+    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 200)
     emb.gen_data()
     #emb.save_spikes('spikes2.mat')
-#    emb.run()
+    emb.run()
