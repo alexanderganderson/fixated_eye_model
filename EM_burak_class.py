@@ -117,12 +117,13 @@ class EMBurak:
         self.YS = np.arange(- self.L_I / 2, self.L_I / 2)
         self.XS, self.YS = self.XS.astype('float32'), self.YS.astype('float32') # Position of pixels
 
+        # Position of LGN receptive fields
         self.XE, self.YE = np.meshgrid(np.arange(- self.L_N / 2, self.L_N / 2),
                                        np.arange(- self.L_N / 2, self.L_N / 2))
         self.XE, self.YE = self.XE.ravel().astype('float32'), self.YE.ravel().astype('float32') 
-        # Position of LGN receptive fields
-
-        self.S = np.zeros((self.L_I, self.L_I)).astype('float32') # Pixel values
+        
+        # Pixel values
+        self.S = np.zeros((self.L_I, self.L_I)).astype('float32') 
         # Assumes that the first dimension is 'Y' and the second dimension is 'X'
 
         self.Var = 0.25 * np.ones((self.L_I,)).astype('float32') # Pixel spread variances
@@ -605,18 +606,21 @@ class EMBurak:
                                      self.L0, self.L1, 
                                      self.DT, self.G)
  
-    def save_spikes(self, filename):
-        """
-        Saves a .mat file with the spikes and some other summary data
-        """
-        savemat(filename, {'R': self.R, 
-                           'N_T': self.N_T,
-                           'DT': self.DT,
-                           'DC': self.DC})
+    def reset_data_dict():
+        self.data = {}
+ 
+#    def save_spikes(self, filename):
+#        """
+#        Saves a .mat file with the spikes and some other summary data
+#        """
+#        savemat(filename, {'R': self.R, 
+#                           'N_T': self.N_T,
+#                           'DT': self.DT,
+#                           'DC': self.DC})
 
 
 if __name__ == '__main__':
     emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 200)
     emb.gen_data()
-    #emb.save_spikes('spikes2.mat')
-    emb.run()
+    emb.run_EM()
+    emb.save()
