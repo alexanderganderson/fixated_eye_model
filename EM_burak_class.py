@@ -14,6 +14,7 @@ from utils.SNR import SNR
 import matplotlib.pyplot as plt
 import cPickle as pkl
 from scipy.io import savemat
+from utils.time_filename import time_string
 
 # For the particle filter module, this class mediates the emission probabilities
 class PoissonLP(PF.LikelihoodPotential):
@@ -80,7 +81,8 @@ class EMBurak:
         """
 
         self.debug = False # If True, show debug images
-
+        self.save_mode = True # If true, save results of each EM iteration
+        
         # Simulation Parameters
         self.DT = _DT # Simulation timestep
         self.DC = _DC  # Diffusion Constant
@@ -146,10 +148,14 @@ class EMBurak:
         
         self.init_image()
         
+        if (self.save_mode):
+            self.init_output_dir()
+        
 
     def gen_data(self):
         """
         Generates a path and spikes
+        Builds a dictionary saving these data
         """
         self.gen_path()
         self.gen_spikes()
@@ -162,7 +168,8 @@ class EMBurak:
         Then saves relevant summary information about the run
         """
         self.run_EM()
-        self.save()
+        if (self.save_mode):
+            self.save()
 
 
     def init_theano_vars(self):
@@ -358,6 +365,19 @@ class EMBurak:
         if (self.debug):
             self.ig.plot()
 
+    def init_output_dir(self):
+        """
+        Create an output directory 
+        """
+        if not os.path.exists('output'):
+            os.mkdir('output')
+            
+        self.output_dir = 'output/' + time_string()
+        
+        if not os.path.exists(self.output_dir):
+            os.mkdir(self.output_dir)
+            
+
     def gen_path(self):
         """
         Generate a retinal path. Note that the path has a bias towards the
@@ -544,8 +564,9 @@ class EMBurak:
         Saves information relevant to the EM run
         data.pkl - saves dictionary with all data relevant to EM run
         (Only includes dict for EM data if that was run)
-        """        
-        pkl.dump(self.data, open("output/data.pkl", 'wb'))
+        """
+        fn = self.output_dir + '/data.' + time_string() + '.pkl'        
+        pkl.dump(self.data, open(fn, 'wb'))
 
 
     def plot_image_estimate(self):
@@ -606,21 +627,10 @@ class EMBurak:
                                      self.L0, self.L1, 
                                      self.DT, self.G)
  
-    def reset_data_dict():
-        self.data = {}
- 
-#    def save_spikes(self, filename):
-#        """
-#        Saves a .mat file with the spikes and some other summary data
-#        """
-#        savemat(filename, {'R': self.R, 
-#                           'N_T': self.N_T,
-#                           'DT': self.DT,
-#                           'DC': self.DC})
-
 
 if __name__ == '__main__':
     emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
-    emb.gen_data()
-    emb.run_EM()
-    emb.save()
+    for _ in range(2):
+        emb.gen_data()
+        emb.run()
+    
