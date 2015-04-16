@@ -104,7 +104,7 @@ class EMBurak:
         self.Rho = 0.4
         self.Eps = 0.001
         self.N_g_itr = 5
-        self.N_itr = 20
+        self.N_itr = 10
 
         # E Parameters (Particle Filter)
         self.N_P = 25 # Number of particles for the EM
@@ -269,7 +269,7 @@ class EMBurak:
                               + (1 - self.t_R.dimshuffle('x', 0, 1)) * T.log(1 - self.t_FP), axis = (1, 2))
 
         # Generate Spikes
-        self.rng = T.shared_randomstreams.RandomStreams(seed = 100)
+        self.rng = T.shared_randomstreams.RandomStreams(seed = 10)
         self.t_R_gen = (self.rng.uniform(size = self.t_FP.shape) < self.t_FP).astype('float32')
 
     def init_theano_funcs(self):
@@ -417,6 +417,7 @@ class EMBurak:
         """
         Generate LGN responses given the path and the image
         """
+        self.t_S.set_value(self.S)
         self.R = self.spikes(self.XR, self.YR, self.L0, self.L1, self.DT, self.G)[0]
         print 'Mean firing rate ' + str(self.R.mean() / self.DT)
 
@@ -474,6 +475,7 @@ class EMBurak:
         result is saved in t_S.get_value()
         """
         self.reset_M_aux()
+#        print self.t_S_Eg2.get_value()
         print 'Spike Energy / t | Reg. Energy / t | SNR' 
         for v in range(N_g_itr):
             E, E_rec, E_R = self.img_grad(
@@ -489,7 +491,7 @@ class EMBurak:
                    str(self.img_SNR))
 
         
-    def run_EM(self, N_itr = 20, N_g_itr = 5):
+    def run_EM(self, N_itr = 10, N_g_itr = 5):
         """
         Runs full expectation maximization algorithm
         N_itr - number of iterations of EM
@@ -506,6 +508,7 @@ class EMBurak:
         EM_data = {}
     
         print 'Running full EM'
+        
         for u in range(N_itr):
             t = self.N_T * (u + 1) / N_itr #t = self.N_T
             print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
@@ -636,8 +639,13 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
-    for _ in range(3):
+    emb = EMBurak(_DC = 0.1, _DT = 0.001, _N_T = 50)
+    for _ in range(4):
+        
+#        emb.init_theano_vars()
+#        emb.init_theano_funcs()
+#        emb.init_particle_filter()
         emb.gen_data()
+        
         emb.run()
     
