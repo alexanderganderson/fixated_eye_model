@@ -566,7 +566,7 @@ class EMBurak:
         data.pkl - saves dictionary with all data relevant to EM run
         (Only includes dict for EM data if that was run)
         """
-        fn = self.output_dir + '/data.' + time_string() + '.pkl'        
+        fn = self.output_dir + '/data_' + time_string() + '.pkl'        
         pkl.dump(self.data, open(fn, 'wb'))
 
 
