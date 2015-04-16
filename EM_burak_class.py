@@ -639,13 +639,8 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 0.1, _DT = 0.001, _N_T = 50)
+    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
     for _ in range(4):
-        
-#        emb.init_theano_vars()
-#        emb.init_theano_funcs()
-#        emb.init_particle_filter()
-        emb.gen_data()
-        
+        emb.gen_data()        
         emb.run()
     
