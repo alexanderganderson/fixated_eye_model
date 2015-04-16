@@ -631,7 +631,7 @@ class EMBurak:
 
 if __name__ == '__main__':
     emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
-    for _ in range(2):
+    for _ in range(3):
         emb.gen_data()
         emb.run()
     
