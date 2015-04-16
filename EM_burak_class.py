@@ -148,6 +148,7 @@ class EMBurak:
         self.init_particle_filter()
         
         self.init_image()
+        self.init_path_generator()
         
         if (self.save_mode):
             self.init_output_dir()
@@ -379,19 +380,24 @@ class EMBurak:
             os.mkdir(self.output_dir)
             
 
+    def init_path_generator(self):
+        """
+        Initialize the path generator
+        """
+        self.c = Center(self.L_I, self.DC, self.DT)
+        
     def gen_path(self):
         """
         Generate a retinal path. Note that the path has a bias towards the
             center so that the image does not go too far out of range
         """
-        self.c = Center(self.L_I, self.DC, self.DT)
         for b in range(self.N_B):
+            self.c.reset()
             for t in range(self.N_T):
                 x = self.c.get_center()
                 self.XR[b, t] = x[0]
                 self.YR[b, t] = x[1]
                 self.c.advance()
-            self.c.reset()
 
 
     def plot_path(self):
@@ -630,8 +636,8 @@ class EMBurak:
  
 
 if __name__ == '__main__':
+    emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
     for _ in range(3):
-        emb = EMBurak(_DC = 50., _DT = 0.001, _N_T = 100)
         emb.gen_data()
         emb.run()
     
