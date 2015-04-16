@@ -5,6 +5,7 @@
 import numpy as np
 import theano
 import theano.tensor as T
+import os
 from scipy.signal import convolve2d
 from utils.bounded_diffusion import Center
 import utils.particle_filter as PF
