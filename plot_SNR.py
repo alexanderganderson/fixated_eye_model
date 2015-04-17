@@ -1,6 +1,8 @@
 import numpy as np
 import cPickle as pkl
 import sys
+import os
+
 #import matplotlib.pyplot as plt
 
 def inner_product(p1, l1x, l1y, 
@@ -92,11 +94,22 @@ class DataAnalyzer:
                    S_est.ravel(), self.XS + dx, self.YS + dy, 
                    self.var)
 
+    def SNR_list(self):
+        """
+        Returns a list giving the SNR after each iteration
+        """
+        return [self.SNR_idx(q) for q in range(self.N_itr)]
+
 
 if __name__ == '__main__':
-    da = DataAnalyzer(sys.argv[1])
+    dir = sys.argv[1]
+    filenames = os.listdir(dir)
 
-    print [da.SNR_idx(i) for i in range(da.N_itr)]
+    for filename in filenames:
+
+        da = DataAnalyzer(dir + filename)
+        SNRs = da.SNR_list()
+        print SNRs
 
 #plt.plot(SNRs)
 #plt.show()
