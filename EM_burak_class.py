@@ -513,11 +513,12 @@ class EMBurak:
             t = self.N_T * (u + 1) / N_itr #t = self.N_T
             print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
             
-            # Run E step
-            self.run_E(t)
+            for _ in range(2):
+                # Run E step
+                self.run_E(t)
             
-            # Run M step
-            self.run_M(t, N_g_itr = N_g_itr)
+                # Run M step
+                self.run_M(t, N_g_itr = N_g_itr)
             
             iteration_data = {}
             iteration_data['time_steps'] = t
