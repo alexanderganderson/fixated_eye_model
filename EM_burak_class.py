@@ -148,7 +148,7 @@ class EMBurak:
         self.init_theano_vars()
         self.init_theano_funcs()
         self.set_gain_factor()
-        self.init_particle_filter()
+        #self.init_particle_filter()
         
         self.init_image()
         self.init_path_generator()
@@ -165,7 +165,7 @@ class EMBurak:
         self.gen_path()
         self.gen_spikes()
         self.build_param_and_data_dict()
-        
+        self.init_particle_filter()
              
     def run(self):
         """
@@ -344,6 +344,7 @@ class EMBurak:
     def init_particle_filter(self):
         """
         Initializes the particle filter class
+        Requires spikes to already be generated
         """
         # Define necessary components for the particle filter
         D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
@@ -353,7 +354,8 @@ class EMBurak:
         ip = PF.GaussIP(sdev * 0.01, 2)
         tp = PF.GaussTP(sdev, 2)
         lp = PoissonLP(self.L0, self.L1, self.DT, self.G, self.spike_energy)
-        self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp)
+        self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp, 
+                                    self.R.transpose(), self.N_P)
 
 
     def init_image(self):
@@ -451,13 +453,18 @@ class EMBurak:
    
     def run_E(self, t):
         """
-        Runs the expectation step for the first t time steps
+        Runs the the particle filter until it has run a total of t time steps
         t - number of timesteps
         The result is saved in self.pf.XS,WS,means
         """
-        if (t > self.N_T):
-            print 'Maximum simulated timesteps exceeded in E step'
-        self.pf.run(self.R.transpose()[0:t], self.N_P)
+        if (t > self.N_T): 
+            raise IndexError('Maximum simulated timesteps exceeded in E step')
+        #self.pf.run(self.R.transpose()[0:t], self.N_P)
+
+        while (pf.t < t):
+            self.pf.advance()
+        self.pf.calculate_means_sdevs()
+        
         print 'Path SNR ' + str(SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
     
     
@@ -478,7 +485,6 @@ class EMBurak:
         result is saved in t_S.get_value()
         """
         self.reset_M_aux()
-#        print self.t_S_Eg2.get_value()
         print 'Spike Energy / t | Reg. Energy / t | SNR' 
         for v in range(N_g_itr):
             E, E_rec, E_R = self.img_grad(
@@ -514,14 +520,14 @@ class EMBurak:
         
         for u in range(N_itr):
             t = self.N_T * (u + 1) / N_itr #t = self.N_T
-            print 'Iteration number ' + str(u) + ' t_step annealing ' + str(t)
+            print ('Iteration number ' + str(u) + 
+                   ' Running up time time = ' + str(t))
             
-            for _ in range(2):
-                # Run E step
-                self.run_E(t)
+            # Run E step
+            self.run_E(t)
             
-                # Run M step
-                self.run_M(t, N_g_itr = N_g_itr)
+            # Run M step
+            self.run_M(t, N_g_itr = N_g_itr)
             
             iteration_data = {}
             iteration_data['time_steps'] = t
@@ -647,8 +653,8 @@ class EMBurak:
 if __name__ == '__main__':
     DCs = [0.01, 10., 100.]
     for DC in DCs:
-        emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 9, _a = 2.)
-        for _ in range(5):
+        emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 18, _a = 1.)
+        for _ in range(2):
             emb.gen_data()        
             emb.run()
     
