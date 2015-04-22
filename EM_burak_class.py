@@ -461,7 +461,7 @@ class EMBurak:
             raise IndexError('Maximum simulated timesteps exceeded in E step')
         #self.pf.run(self.R.transpose()[0:t], self.N_P)
 
-        while (pf.t < t):
+        while (self.pf.t < t):
             self.pf.advance()
         self.pf.calculate_means_sdevs()
         
