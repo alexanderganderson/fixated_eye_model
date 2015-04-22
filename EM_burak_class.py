@@ -645,11 +645,10 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 0.01, _DT = 0.001, _N_T = 100, _L_N = 9, _a = 2.)
-
-    emb.gen_data()        
-    emb.run()
+    DCs = [0.01, 10., 100.]
+    for DC in DCs:
+        emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 9, _a = 2.)
+        for _ in range(5):
+            emb.gen_data()        
+            emb.run()
     
-    emb = EMBurak(_DC = 10., _DT = 0.001, _N_T = 100, _L_N = 9, _a = 2.)
-    emb.gen_data()
-    emb.run()
