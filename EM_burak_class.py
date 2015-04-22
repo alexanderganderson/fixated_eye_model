@@ -70,7 +70,7 @@ class PoissonLP(PF.LikelihoodPotential):
 
 class EMBurak:
     def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
-                 _L_I = 14, _L_N = 18):
+                 _L_I = 14, _L_N = 18, _a = 1.):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -121,9 +121,12 @@ class EMBurak:
         self.XS, self.YS = self.XS.astype('float32'), self.YS.astype('float32') # Position of pixels
 
         # Position of LGN receptive fields
+        self.a = _a # Receptive field spacing
         self.XE, self.YE = np.meshgrid(np.arange(- self.L_N / 2, self.L_N / 2),
                                        np.arange(- self.L_N / 2, self.L_N / 2))
         self.XE, self.YE = self.XE.ravel().astype('float32'), self.YE.ravel().astype('float32') 
+        self.XE = self.XE * self.a
+        self.YE = self.YE * self.a
         
         # Pixel values
         self.S = np.zeros((self.L_I, self.L_I)).astype('float32') 
@@ -543,6 +546,8 @@ class EMBurak:
         data['ALPHA'] = self.ALPHA
         data['GAMMA'] = self.GAMMA
         
+        data['a'] = self.a
+
         data['N_T'] = self.N_T
         data['L_I'] = self.L_I
         data['L_N'] = self.L_N
@@ -640,8 +645,11 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    emb = EMBurak(_DC = 800., _DT = 0.001, _N_T = 100)
-    for _ in range(10):
-        emb.gen_data()        
-        emb.run()
+    emb = EMBurak(_DC = 0.01, _DT = 0.001, _N_T = 100, _L_N = 9, _a = 2.)
+
+    emb.gen_data()        
+    emb.run()
     
+    emb = EMBurak(_DC = 10., _DT = 0.001, _N_T = 100, _L_N = 9, _a = 2.)
+    emb.gen_data()
+    emb.run()
