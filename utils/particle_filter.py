@@ -262,7 +262,7 @@ class ParticleFilter:
         following distribution:
         p(X_i|Y_0,Y_1,...,Y_i)
     """
-    def __init__(self, _ipd, _tpd, _ip, _tp, _lp):
+    def __init__(self, _ipd, _tpd, _ip, _tp, _lp, _Y, _N_P):
         """
         Create a Particle Filter Object
         ipd - Initial Proposal Distribution
@@ -270,6 +270,8 @@ class ParticleFilter:
         ip - Initial Potential
         tp - Transition Potential
         lp - Likelihood Potential
+        Y - matrix of observed values of the form (N_T, other dims)
+        N_P - number of particles to use in the particle filter
         """
         self.ipd = _ipd
         self.tpd = _tpd
@@ -278,6 +280,27 @@ class ParticleFilter:
         self.lp = _lp
         self.dim = self.ipd.dim
         
+        self.Y = _Y
+        self.N_T = self.Y.shape[0]
+        self.N_P = _N_P
+        
+        self.XS = np.zeros((self.N_T, self.N_P, self.dim)).astype('float32')
+        self.WS = np.zeros((self.N_T, self.N_P)).astype('float32')
+        
+        self.t = 0 # Current time of the particle filter
+        self.resample_times = []
+        
+    
+    def reset(self):
+        """
+        Resets the particle filter
+        """
+        self.XS[:, :] = 0.
+        self.WS[:, :] = 0.
+        self.t = 0
+        self.resample_times = []
+        
+    
     def resample(self, W):
         """
         Implements the systematic resampling method
@@ -302,34 +325,35 @@ class ParticleFilter:
                 i = i + 1
         return idx
     
-    def run(self, Y, _N_P):
+    
+    
+    
+    def advance(self):
         """
-        Y - matrix of observed values of the form
-        N_P - number of particles to use
-        Y_T = np.zeros(N_T, other dims)
+
+        Advances the particle filter one timestep
         
         Performs a resampling if the effective sample size becomes
             less than have the number of particles
         """
-        self.resample_times = []
-        self.N_P = _N_P
-        self.N_T = Y.shape[0]
-        self.XS = np.zeros((self.N_T, self.N_P, self.dim)).astype('float32')
-        self.WS = np.zeros((self.N_T, self.N_P)).astype('float32')
         
-        self.XS[0] = self.ipd.sample(Y[0], self.N_P)
-        self.WS[0] = (self.ip.prob(self.XS[0]) 
-                      * self.lp.prob(Y[0], self.XS[0]) 
-                      / self.ipd.prob(self.XS[0], Y[0])
-                      )
-        self.WS[0] = self.WS[0] / np.sum(self.WS[0])
-        
-        for i in range(1, self.N_T):
-            self.XS[i] = self.tpd.sample(Y[i], self.XS[i - 1])
+        if (self.t == 0):
+            self.XS[0] = self.ipd.sample(self.Y[0], self.N_P)
+            self.WS[0] = (self.ip.prob(self.XS[0]) 
+                          * self.lp.prob(self.Y[0], self.XS[0]) 
+                          / self.ipd.prob(self.XS[0], self.Y[0])
+                          )
+            self.WS[0] = self.WS[0] / np.sum(self.WS[0])
+            self.t = self.t + 1
+            
+            
+        elif (self.t < self.N_T):
+            i = self.t
+            self.XS[i] = self.tpd.sample(self.Y[i], self.XS[i - 1])
             self.WS[i] = (self.WS[i - 1] 
-                          * self.lp.prob(Y[i], self.XS[i]) 
+                          * self.lp.prob(self.Y[i], self.XS[i]) 
                           * self.tp.prob(self.XS[i], self.XS[i - 1]) 
-                          / self.tpd.prob(self.XS[i], Y[i], self.XS[i - 1])
+                          / self.tpd.prob(self.XS[i], self.Y[i], self.XS[i - 1])
                           )
             self.WS[i] = self.WS[i] / np.sum(self.WS[i])
             if (np.sum(self.WS[i] ** 2) ** (-1) < self.N_P / 2.):
@@ -337,7 +361,17 @@ class ParticleFilter:
                 self.XS[i] = self.XS[i, idx]
                 self.WS[i] = 1. / self.N_P
                 self.resample_times.append(i)
+            
+            self.t = self.t + 1
+        else:
+            print ("Particle filter has already run to completion + \n" +
+                   "use the reset function to do another run")
     
+    
+    def calculate_means_sdevs(self):
+        """
+        Calculates the means and standard deviations
+        """
         self.means = np.sum(self.XS * 
                             self.WS.reshape(self.N_T, self.N_P, 1), 
                             axis = 1)
@@ -346,15 +380,15 @@ class ParticleFilter:
                                  axis = 1) - self.means ** 2)
     
             
-    def plot(self, X0, X1, DT):
+    def plot(self, X, DT):
         """
         Generate a plot of the estimated hidden state and the real hidden state
             as a function of time
-        X0 - actual hidden state along dimension 0
-        X1 - actual hidden state along dimension 1
+        X - actual hidden state in the form (N_T, num hidden states)
         DT - timestep size
         """
         
+        self.calculate_means_sdevs()
                 
         plt.subplot(1, 2, 1)
         plt.fill_between(DT * np.arange(self.N_T), 
@@ -362,19 +396,19 @@ class ParticleFilter:
                          self.means[:, 0] + self.sdevs[:, 0], 
                          alpha = 0.5, linewidth = 1.)
         plt.plot(DT * np.arange(self.N_T), self.means[:, 0], label = 'estimate')
-        plt.plot(DT * np.arange(self.N_T), X0, label = 'actual')
+        plt.plot(DT * np.arange(self.N_T), X[:, 0], label = 'actual')
         plt.xlabel('Time (s)')
         plt.ylabel('Relative position (pixels)')
         plt.legend()
         plt.title('Estimated versus actual position given the image for dim0')
-        
+
         plt.subplot(1, 2, 2)
         plt.fill_between(DT * np.arange(self.N_T), 
                          self.means[:, 1] - self.sdevs[:, 1], 
                          self.means[:, 1] + self.sdevs[:, 1], 
                          alpha = 0.5, linewidth = 1.)
         plt.plot(DT * np.arange(self.N_T), self.means[:, 1], label = 'estimate')
-        plt.plot(DT * np.arange(self.N_T), X1, label = 'actual')
+        plt.plot(DT * np.arange(self.N_T), X[:, 1], label = 'actual')
         plt.xlabel('Time (s)')
         plt.ylabel('Relative position (pixels)')
         plt.legend()
@@ -407,9 +441,11 @@ def main():
     lp = GaussLP(s2)
 
 
-    pf = ParticleFilter(ipd, tpd, ip, tp, lp)
-    pf.run(Y, N_P)
-    pf.plot(X, Y, 0)
+    pf = ParticleFilter(ipd, tpd, ip, tp, lp, Y, N_P)
+    for _ in range(N_T):
+        pf.advance()
+        
+    pf.plot(X, 0.001)
 
 
 if(__name__ == '__main__'):
