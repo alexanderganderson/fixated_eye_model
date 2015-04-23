@@ -363,9 +363,9 @@ class EMBurak:
         Initialize the Image
         """
         self.ig = ImageGenerator(self.L_I)
-        self.ig.make_big_E()
-        #self.ig.random()
-        #self.ig.smooth()
+        #self.ig.make_big_E()
+        self.ig.make_digit()
+        
         self.ig.normalize()
         self.S = self.ig.img
         self.t_S.set_value(self.S)

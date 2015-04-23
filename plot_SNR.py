@@ -60,7 +60,7 @@ class DataAnalyzer:
         self.S = self.data['S']
         self.N_itr = self.data['N_itr']
         self.Var = self.data['Var'][0]
-        
+        self.DC = self.data['DC']
 
         # Convert retinal positions to grid
         XS = self.data['XS']
@@ -92,9 +92,11 @@ class DataAnalyzer:
         YR_est = XYR_est[:, 1]
 
 
-        dx = np.mean(self.XR[0:t] - XR_est)
-        dy = np.mean(self.YR[0:t] - YR_est)
-    
+        dx = np.mean(self.XR[0:t] - XR_est[0:t])
+        dy = np.mean(self.YR[0:t] - YR_est[0:t])
+        
+        self.dx = dx
+        self.dy = dy
 
         return SNR(self.S.ravel(), self.XS, self.YS, 
                    S_est.ravel(), self.XS + dx, self.YS + dy, 
@@ -117,23 +119,29 @@ class DataAnalyzer:
         
         if (d == 0):
             path = self.XR
+            label = 'Hor.'
+            dxy = self.dx
         elif (d == 1):
             path = self.YR
+            label = 'Ver.'
+            dxy = self.dy
         else:
             raise ValueError('d must be either 0 or 1')
         
         t = self.data['EM_data'][q]['time_steps']
 
-        plt.fill_between(self.DT * np.arange(t), 
+        plt.fill_between(self.DT * np.arange(self.N_T), 
                          est_mean[:, d] - est_sdev[:, d], 
                          est_mean[:, d] + est_sdev[:, d], 
                          alpha = 0.5, linewidth = 1.)
-        plt.plot(self.DT * np.arange(t), est_mean[:, d], label = 'estimate')
-        plt.plot(self.DT * np.arange(self.N_T), path, label = 'actual')
+        plt.plot(self.DT * np.arange(self.N_T), 
+                 est_mean[:, d], label = 'estimate')
+        plt.plot(self.DT * np.arange(self.N_T), 
+                 path, label = 'actual')
         plt.xlabel('Time (s)')
         plt.ylabel('Relative position (pixels)')
-        plt.legend()
-        plt.title('Estimated position for dim' + str(d))
+        #plt.legend()
+        plt.title(label + ' Pos., shift = %.2f' % dxy)
     
     
     def plot_EM_estimate(self, q):
@@ -161,8 +169,14 @@ class DataAnalyzer:
     
         sdev = float(np.sqrt(self.Var))
     
+        dt = self.DT * self.data['EM_data'][q]['time_steps'] * 1000.
+        
+        plt.figure().suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f' % (dt, self.DC))
+        
+
+        
         plt.subplot(2, 2, 1)
-        plt.title('Estimated Image: SNR = ' + str(self.SNR_idx(q)))
+        plt.title('Estimated Image: SNR = %.2f' % self.SNR_idx(q))
         plt.imshow(gaussian_filter(S_est, sdev), 
                    cmap = plt.cm.gray, interpolation = 'nearest', 
                    vmin = vmin, vmax = vmax)
@@ -181,7 +195,8 @@ class DataAnalyzer:
         plt.subplot(2, 2, 4)
         self.plot_path_estimate(q, 1)
 
-    
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.85)
 
 
 if __name__ == '__main__':
