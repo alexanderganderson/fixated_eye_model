@@ -363,8 +363,8 @@ class EMBurak:
         Initialize the Image
         """
         self.ig = ImageGenerator(self.L_I)
-        #self.ig.make_big_E()
-        self.ig.make_digit()
+        self.ig.make_big_E()
+        #self.ig.make_digit()
         
         self.ig.normalize()
         self.S = self.ig.img
@@ -651,10 +651,10 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    DCs = [0.01, 10., 100.]
+    DCs = [100.]#[0.01, 10., 100.]
     for DC in DCs:
         emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 18, _a = 1.)
-        for _ in range(2):
+        for _ in range(1):
             emb.gen_data()        
             emb.run()
     
