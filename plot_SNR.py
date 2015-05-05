@@ -198,6 +198,12 @@ class DataAnalyzer:
         plt.tight_layout()
         plt.subplots_adjust(top=0.85)
 
+    def save_images(self):
+        for q in range(self.N_itr):
+            plt.clf()
+            self.plot_EM_estimate(q)
+            plt.savefig('img%d.png' % (100 + q))
+            
 
 if __name__ == '__main__':
     dir = sys.argv[1]
