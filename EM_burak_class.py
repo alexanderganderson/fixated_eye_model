@@ -8,7 +8,7 @@ import theano.tensor as T
 import os
 from scipy.signal import convolve2d
 from utils.bounded_diffusion import Center
-import utils.particle_filter as PF
+import utils.particle_filter_new as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator
 from utils.SNR import SNR
@@ -26,21 +26,22 @@ class PoissonLP(PF.LikelihoodPotential):
     """
     Poisson likelihood potential for use in the burak EM
     """
-    def __init__(self, _L0, _L1, _DT, _G, _spike_energy):
+    def __init__(self, D_O, L0, L1, DT, G, spike_energy):
         """
+        D_O - dimension of output (number of neurons)
         L0 - lower firing rate
         L1 - higher firing rate
         DT - time step
         G - gain factor
-        _spike_energy - function handle to spike energy function
-
+        spike_energy - function handle to spike energy function
+                         see prob for desired arguments for spike_energy
         """
-        PF.LikelihoodPotential.__init__(self)
-        self.L0 = _L0
-        self.L1 = _L1
-        self.DT = _DT
-        self.G = _G
-        self.spike_energy = _spike_energy
+        PF.LikelihoodPotential.__init__(self, 2, D_O)
+        self.L0 = L0
+        self.L1 = L1
+        self.DT = DT
+        self.G = G
+        self.spike_energy = spike_energy
         
     def prob(self, Yc, Xc):
         """
@@ -142,6 +143,7 @@ class EMBurak:
         
         self.XE, self.YE = np.meshgrid(np.arange(- self.L_N / 2, self.L_N / 2),
                                        np.arange(- self.L_N / 2, self.L_N / 2))
+
         self.XE = self.XE.ravel().astype('float32') 
         self.YE = self.YE.ravel().astype('float32') 
         self.XE = self.XE * self.a
@@ -437,11 +439,12 @@ class EMBurak:
         # Define necessary components for the particle filter
         D_H = 2 # Dimension of hidden state (i.e. x,y = 2 dims)
         sdev = np.sqrt(self.DC * self.DT / 2) # Needs to be sdev per component
-        ipd = PF.GaussIPD(sdev * 0.001, 2)
-        tpd = PF.GaussTPD(sdev, 2)
-        ip = PF.GaussIP(sdev * 0.01, 2)
-        tp = PF.GaussTP(sdev, 2)
-        lp = PoissonLP(self.L0, self.L1, self.DT, self.G, self.spike_energy)
+        ipd = PF.GaussIPD(D_H, self.N_N, sdev * 0.001)
+        tpd = PF.GaussTPD(D_H, self.N_N, sdev)
+        ip = PF.GaussIP(D_H, sdev * 0.001)
+        tp = PF.GaussTP(D_H, sdev)
+        lp = PoissonLP(self.N_N, self.L0, self.L1, 
+                       self.DT, self.G, self.spike_energy)
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp, 
                                     self.R.transpose(), self.N_P)
 
@@ -779,9 +782,9 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    DCs = [100.]#[0.01, 10., 100.]
+    DCs = [1.]#[0.01, 10., 100.]
     for DC in DCs:
-        emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 18, _a = 1.)
+        emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 10, _a = 1.)
         for _ in range(1):
             emb.gen_data()        
             emb.run()
