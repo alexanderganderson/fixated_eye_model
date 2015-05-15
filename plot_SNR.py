@@ -55,12 +55,16 @@ class DataAnalyzer:
         self.DT = self.data['DT']
         self.N_T = self.data['N_T']
 
+        self.sparse_prior = self.data['sparse_prior']
+
         self.XR = self.data['XR'][0]
         self.YR = self.data['YR'][0]
         self.S = self.data['S']
         self.N_itr = self.data['N_itr']
         self.Var = self.data['Var'][0]
         self.DC = self.data['DC']
+        self.L_I = self.data['L_I']
+
 
         # Convert retinal positions to grid
         XS = self.data['XS']
@@ -75,7 +79,7 @@ class DataAnalyzer:
 
     
 
-    def SNR_idx(self, q):
+    def SNR_idx(self, q, sparse_est = True):
         """
         Calculates the SNR between the ground truth and the 
             image produced after iteration q of the EM
@@ -85,7 +89,10 @@ class DataAnalyzer:
             fixes. )
         """
         XYR_est = self.data['EM_data'][q]['path_means']
-        S_est = self.data['EM_data'][q]['image_est']
+        if sparse_est:
+            S_est = self.get_sparse_reconstruction(q)
+        else:
+            S_est = self.data['EM_data'][q]['image_est']
         t = self.data['EM_data'][q]['time_steps']
 
         XR_est = XYR_est[:, 0]
@@ -102,11 +109,11 @@ class DataAnalyzer:
                    S_est.ravel(), self.XS + dx, self.YS + dy, 
                    self.var)
 
-    def SNR_list(self):
+    def SNR_list(self, sparse_est):
         """
         Returns a list giving the SNR after each iteration
         """
-        return [self.SNR_idx(q) for q in range(self.N_itr)]
+        return [self.SNR_idx(q, sparse_est) for q in range(self.N_itr)]
 
 
     def plot_path_estimate(self, q, d):
@@ -142,8 +149,18 @@ class DataAnalyzer:
         plt.ylabel('Relative position (pixels)')
         #plt.legend()
         plt.title(label + ' Pos., shift = %.2f' % dxy)
-    
-    
+
+    def get_sparse_reconstruction(self, q):
+        """
+        Returns the sparse reconstruction of the image after iteration q
+        """
+        if not self.sparse_prior:
+            raise RuntimeError('Data did not use a sparse prior')
+        A = self.data['EM_data'][q]['coeff_est']
+        D = self.data['D']
+        return np.dot(A[np.newaxis, :], D).reshape(self.L_I, self.L_I)
+
+
     def plot_EM_estimate(self, q):
         """
         Creates a full plot of the estimated image, actual image, 
@@ -162,37 +179,49 @@ class DataAnalyzer:
         vmax = m2 + 0.1 * (m2 - m1)
     
     
-        S_est = self.data['EM_data'][q]['image_est']
-    
-        # Note actual image is convolved with a gaussian during the simulation 
-        #   even though the image saved has not has this happen yet
-    
         sdev = float(np.sqrt(self.Var))
     
         dt = self.DT * self.data['EM_data'][q]['time_steps'] * 1000.
         
         plt.figure().suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f' % (dt, self.DC))
         
+        # Note actual image is convolved with a gaussian during the simulation 
+        #   even though the image saved has not has this happen yet
 
-        
-        plt.subplot(2, 2, 1)
-        plt.title('Estimated Image: SNR = %.2f' % self.SNR_idx(q))
+
+        plt.subplot(2, 3, 1)
+        plt.title('Estimated Image, S: SNR = %.2f' 
+                  % self.SNR_idx(q, sparse_est = False))
+        S_est = self.data['EM_data'][q]['image_est']
+
         plt.imshow(gaussian_filter(S_est, sdev), 
                    cmap = plt.cm.gray, interpolation = 'nearest', 
                    vmin = vmin, vmax = vmax)
         plt.colorbar()
+
+
+        plt.subplot(2, 3, 2)
+
+        S_sp = self.get_sparse_reconstruction(q)
+        plt.title('Estimated Image, DA:  SNR = %.2f' 
+                  % self.SNR_idx(q, sparse_est = True))
+        plt.imshow(gaussian_filter(S_sp, sdev), 
+                   cmap = plt.cm.gray, interpolation = 'nearest', 
+                   vmin = vmin, vmax = vmax)
+        plt.colorbar()
+        
     
-        plt.subplot(2, 2, 2)
+        plt.subplot(2, 3, 3)
         plt.title('Actual Image')
         plt.imshow(gaussian_filter(self.S, sdev), 
                    cmap = plt.cm.gray, interpolation = 'nearest',
                    vmin = vmin, vmax = vmax)
         plt.colorbar()
     
-        plt.subplot(2, 2, 3)
+        plt.subplot(2, 3, 4)
         self.plot_path_estimate(q, 0)
 
-        plt.subplot(2, 2, 4)
+        plt.subplot(2, 3, 5)
         self.plot_path_estimate(q, 1)
 
         plt.tight_layout()
