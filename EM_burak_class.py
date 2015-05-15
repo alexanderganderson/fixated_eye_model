@@ -18,64 +18,12 @@ from scipy.io import savemat
 from utils.time_filename import time_string
 from collections import OrderedDict
 from scipy.io import loadmat
-
-
-
-# For the particle filter module, this class mediates the emission probabilities
-class PoissonLP(PF.LikelihoodPotential):
-    """
-    Poisson likelihood potential for use in the burak EM
-    """
-    def __init__(self, D_O, L0, L1, DT, G, spike_energy):
-        """
-        D_O - dimension of output (number of neurons)
-        L0 - lower firing rate
-        L1 - higher firing rate
-        DT - time step
-        G - gain factor
-        spike_energy - function handle to spike energy function
-                         see prob for desired arguments for spike_energy
-        """
-        PF.LikelihoodPotential.__init__(self, 2, D_O)
-        self.L0 = L0
-        self.L1 = L1
-        self.DT = DT
-        self.G = G
-        self.spike_energy = spike_energy
-        
-    def prob(self, Yc, Xc):
-        """
-        Gives probability p(R_t|X_t, theta),
-        theta = image
-        Yc - Observed spiking pattern - R_t
-        Vectorized according to samples (eg. each row of Y, X is a sample),
-            outputs a vector of probabilities
-        """
-        self.N_P, _ = Xc.shape
-        # Note to pass to theano function need:
-        #  XR -> (N_batches, N_timesteps)
-        #  R -> (N_b, N_pix, N_t)
-        # here, we have one timestep, and particles correspond to batches,
-        #  and given how R is, we need to broadcast the spikes over batches
-        
-        _XR = np.zeros((self.N_P, 1)).astype('float32')
-        _YR = np.zeros((self.N_P, 1)).astype('float32')
-        _XR[:, 0] = Xc[:, 0]
-        _YR[:, 0] = Xc[:, 1]
-        self.N_pix = Yc.shape[0]
-        
-        
-        _R = np.zeros((self.N_pix, 1)).astype('float32')
-        _R[:, 0] = Yc
-        # to pass to spike_prob function, N_P batches, 1 time step
-        Es = - self.spike_energy(_XR, _YR, _R, self.L0, self.L1, self.DT, self.G)
-        Es = Es - Es.mean()
-        return np.exp(Es)
+from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
-    def __init__(self, _DT = 0.002, _DC = 40., _N_T = 200,
-                 _L_I = 14, _L_N = 18, _N_L = 49, _a = 1.):
+    def __init__(self, DT = 0.002, DC = 40., N_T = 200,
+                 L_I = 14, L_N = 18, N_L = 49, a = 1., ALPHA = 0.):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -94,8 +42,8 @@ class EMBurak:
         self.save_mode = True # If true, save results of each EM iteration
         
         # Simulation Parameters
-        self.DT = _DT # Simulation timestep
-        self.DC = _DC  # Diffusion Constant
+        self.DT = DT # Simulation timestep
+        self.DC = DC  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
         
@@ -103,16 +51,16 @@ class EMBurak:
         self.GAMMA = 100. # Pixel out of bounds cost parameter
 
         if self.sparse_prior:
-            self.ALPHA  = 0. # Prior Strength
+            self.ALPHA  = ALPHA # Prior Strength
             self.LAMBDA = 0. # Sparsity constant, set when loading dictionary
             # the sparse prior is ALPHA * ((S-DA) ** 2 + LAMBDA * |A|)
         
         # Problem Dimensions
         if (self.sparse_prior):
-            self.N_L = _N_L # Number of latent sparse factors
-        self.N_T = _N_T # Number of time steps
-        self.L_I = _L_I # Linear dimension of image
-        self.L_N = _L_N # Linear dimension of neuron receptive field grid
+            self.N_L = N_L # Number of latent sparse factors
+        self.N_T = N_T # Number of time steps
+        self.L_I = L_I # Linear dimension of image
+        self.L_N = L_N # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
 
@@ -139,7 +87,7 @@ class EMBurak:
         self.YS = self.YS.astype('float32') 
 
         # Position of LGN receptive fields
-        self.a = _a # Receptive field spacing
+        self.a = a # Receptive field spacing
         
         self.XE, self.YE = np.meshgrid(np.arange(- self.L_N / 2, self.L_N / 2),
                                        np.arange(- self.L_N / 2, self.L_N / 2))
@@ -287,7 +235,6 @@ class EMBurak:
         # indices: b, j, t
         self.t_IpsY = T.sum(self.t_S.dimshuffle('x', 0, 1, 'x', 'x') * 
                             self.t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3), axis = 1)
-        #self.t_IpsX.name = 'IpsX'
         self.t_Ips = T.sum(self.t_IpsY * self.t_PixRFCouplingX, axis = 1)
         self.t_Ips.name = 'Ips'
         
@@ -454,9 +401,8 @@ class EMBurak:
         Initialize the Image
         """
         self.ig = ImageGenerator(self.L_I)
-        self.ig.make_big_E()
-        #self.ig.make_digit()
-        
+        #self.ig.make_big_E()
+        self.ig.make_digit()
         self.ig.normalize()
         self.S = self.ig.img
         self.t_S.set_value(self.S)
@@ -784,7 +730,7 @@ class EMBurak:
 if __name__ == '__main__':
     DCs = [1.]#[0.01, 10., 100.]
     for DC in DCs:
-        emb = EMBurak(_DC = DC, _DT = 0.001, _N_T = 100, _L_N = 10, _a = 1.)
+        emb = EMBurak(DC = DC, DT = 0.001, N_T = 100, L_N = 18)
         for _ in range(1):
             emb.gen_data()        
             emb.run()
