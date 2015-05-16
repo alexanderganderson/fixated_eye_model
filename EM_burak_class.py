@@ -68,7 +68,7 @@ class EMBurak:
         # M - Parameters (ADADELTA)
         self.Rho = 0.4
         self.Eps = 0.001
-        self.N_g_itr = 5
+        self.N_g_itr = 10
         self.N_itr = 10
 
         # E Parameters (Particle Filter)
@@ -567,17 +567,19 @@ class EMBurak:
         return strg
 
         
-    def run_EM(self, N_itr = 10, N_g_itr = 5):
+    def run_EM(self, N_itr = None, N_g_itr = None):
         """
+
         Runs full expectation maximization algorithm
         N_itr - number of iterations of EM
         N_g_itr - number of gradient steps in M step
         Saves summary of run info in self.data 
         Note running twice will overwrite this run info
         """
-        
-        self.N_itr = N_itr
-        self.N_g_itr = N_g_itr
+        if N_itr != None:
+            self.N_itr = N_itr
+        if N_g_itr != None:
+            self.N_g_itr = N_g_itr
         
         self.reset_image_estimate()
             
@@ -585,8 +587,8 @@ class EMBurak:
     
         print 'Running full EM'
         
-        for u in range(N_itr):
-            t = self.N_T * (u + 1) / N_itr #t = self.N_T
+        for u in range(self.N_itr):
+            t = self.N_T * (u + 1) / self.N_itr #t = self.N_T
             print ('Iteration number ' + str(u) + 
                    ' Running up time time = ' + str(t))
             
@@ -594,7 +596,7 @@ class EMBurak:
             self.run_E(t)
             
             # Run M step
-            self.run_M(t, N_g_itr = N_g_itr)
+            self.run_M(t, N_g_itr = self.N_g_itr)
             
             iteration_data = {}
             iteration_data['time_steps'] = t
