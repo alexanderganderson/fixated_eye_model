@@ -56,7 +56,8 @@ class DataAnalyzer:
         self.N_T = self.data['N_T']
 
         self.sparse_prior = self.data['sparse_prior']
-
+        if self.sparse_prior:
+            self.ALPHA = self.data['ALPHA']
         self.XR = self.data['XR'][0]
         self.YR = self.data['YR'][0]
         self.S = self.data['S']
@@ -182,8 +183,8 @@ class DataAnalyzer:
         sdev = float(np.sqrt(self.Var))
     
         dt = self.DT * self.data['EM_data'][q]['time_steps'] * 1000.
-        
-        plt.figure().suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f' % (dt, self.DC))
+        fig = plt.figure(figsize = (15, 8))
+        fig.suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f, ALPHA = %0.2f' % (dt, self.DC, self.ALPHA))
         
         # Note actual image is convolved with a gaussian during the simulation 
         #   even though the image saved has not has this happen yet
@@ -225,7 +226,7 @@ class DataAnalyzer:
         self.plot_path_estimate(q, 1)
 
         plt.tight_layout()
-        plt.subplots_adjust(top=0.85)
+        plt.subplots_adjust(top=0.9)
 
     def save_images(self):
         for q in range(self.N_itr):
