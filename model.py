@@ -39,7 +39,7 @@ class EMBurak:
         
         self.debug = False # If True, show debug images
         self.sparse_prior = True # If true, include sparse prior
-        self.save_mode = True # If true, save results of each EM iteration
+        self.save_mode = False # If true, save results of each EM iteration
         
         # Simulation Parameters
         self.DT = DT # Simulation timestep
@@ -182,11 +182,11 @@ class EMBurak:
         self.t_YS = theano.shared(self.YS, 'YS')
         self.t_XE = theano.shared(self.XE, 'XE')
         self.t_YE = theano.shared(self.YE, 'YE')
-        self.t_Var = theano.shared(self.Var, 'Sig')
+        self.t_Var = theano.shared(self.Var, 'Var')
 
         # dims are i2, i1
         self.t_S = theano.shared(self.S, 'S')
-
+        self.t_S_gen = T.matrix('S_gen')
         self.t_XR = T.matrix('XR')
         self.t_YR = T.matrix('YR')
         self.t_R = T.matrix('R')
@@ -208,6 +208,20 @@ class EMBurak:
         
 
         def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
+            # Take dot product of image with an array of gaussians
+            # t_S - theano image variable dimensions i2, i1
+            # t_Var - variances of receptive fields
+            # t_XS - X coordinate for image pixels for dimension i1
+            # t_YS - Y coordinate for image pixels for dimension i2
+            # t_XE - X coordinate for receptive fields j
+            # t_YE - Y coordinate for receptive fields j
+            # t_XR - X coordinate for retina in form batch, timestep, b,t
+            # t_YR - Y coordinate ''
+
+            # Note in this computation, we do the indices in this form:
+            #  b, i, j, t
+            #  batch, pixel, neuron, timestep
+
             # indices: b, i1, j, t
             t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x') 
                      - t_XE.dimshuffle('x', 'x', 0, 'x') 
@@ -239,33 +253,43 @@ class EMBurak:
             return t_Ips
 
 
+      
+        def firing_prob(t_Ips, t_G, t_L0, t_L1, t_DT):
+            # Firing probabilities indexed by b, j, t
+            # t_Ips - Image-RF inner products indexed as b, j, t
+            # t_G - gain constant
+            # t_L0, t_L1 - min, max firing rate
+            # t_DT - time step size
+
+            t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_G * t_Ips)
+
+            t_FP = T.switch(t_FP_0 > 0.9, 0.9, t_FP_0)
+            return t_FP
+            
         self.t_Ips = inner_products(self.t_S, self.t_Var,
                                     self.t_XS, self.t_YS,
                                     self.t_XE, self.t_YE,
                                     self.t_XR, self.t_YR)
 
+
         self.t_G = T.scalar('G')
 
-        # Take dot product of image with an array of gaussians
-        
-        # Note in this computation, we do the indices in this form:
-        #  b, i, j, t
-        #  batch, pixel, neuron, timestep
-        
-        # Firing probabilities indexed by
-        # b, j, t
-        self.t_FP_0 = self.t_DT * T.exp(T.log(self.t_L0) + 
-                                        T.log(self.t_L1 / self.t_L0) * 
-                                        self.t_G * self.t_Ips)
+        self.t_FP = firing_prob(self.t_Ips, self.t_G, self.t_L0, self.t_L1, self.t_DT)
 
-        self.t_FP = T.switch(self.t_FP_0 > 0.9, 0.9, self.t_FP_0)
+        def spiking_cost(t_R, t_FP):
+            """
+            Returns the negative log likelihood of the spikes given the inner products
+            t_R - spikes in form j, t
+            t_FP - Firing probabilities in form b, j, t
+            Returns -log p(R|X,S) with indices in the form b, j, t
+            """
+            t_E_R = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP) 
+                     + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
+            return t_E_R
 
         # Compute Energy Functions (negative log-likelihood) to minimize
         # Note energy is weighted in time and batch by W_bt (used by particle filter)
-        self.t_E_R = -T.sum(T.sum(self.t_R.dimshuffle('x', 0, 1) 
-                                  * T.log(self.t_FP) 
-                                  + (1 - self.t_R.dimshuffle('x', 0, 1)) 
-                                  * T.log(1 - self.t_FP), axis = 1) 
+        self.t_E_R = T.sum(T.sum(spiking_cost(self.t_R, self.t_FP), axis = 1) 
                                   * self.t_Wbt)
         self.t_E_R.name = 'E_R'
 
@@ -747,7 +771,7 @@ class EMBurak:
 if __name__ == '__main__':
     DCs = [0.1]
     for DC in DCs:
-        emb = EMBurak(DC = DC, DT = 0.001, N_T = 100, L_N = 9, a = 2.)
+        emb = EMBurak(DC = DC, DT = 0.001, N_T = 100, L_N = 14, a = 1.)
         for _ in range(1):
             emb.gen_data()        
             emb.run()
