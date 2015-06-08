@@ -184,6 +184,7 @@ class EMBurak:
         self.t_YE = theano.shared(self.YE, 'YE')
         self.t_Var = theano.shared(self.Var, 'Sig')
 
+        # dims are i2, i1
         self.t_S = theano.shared(self.S, 'S')
 
         self.t_XR = T.matrix('XR')
@@ -205,6 +206,44 @@ class EMBurak:
             self.t_ALPHA = T.scalar('ALPHA')
             self.t_LAMBDA = T.scalar('LAMBDA')
         
+
+        def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
+            # indices: b, i1, j, t
+            t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x') 
+                     - t_XE.dimshuffle('x', 'x', 0, 'x') 
+                     - t_XR.dimshuffle(0, 'x', 'x', 1))
+            t_dX.name = 'dX'
+            # indices: b, i2, j, t
+            t_dY = (t_YS.dimshuffle('x', 0, 'x', 'x') 
+                     - t_YE.dimshuffle('x', 'x', 0, 'x') 
+                     - t_YR.dimshuffle(0, 'x', 'x', 1))
+            t_dY.name = 'dY'
+
+            # Use outer product trick to dot product image with point filters
+            t_PixRFCouplingX = T.exp(-0.5 * t_dX ** 2 / 
+                                       t_Var.dimshuffle('x', 0, 'x', 'x'))
+            t_PixRFCouplingY = T.exp(-0.5 * t_dY ** 2 / 
+                                       t_Var.dimshuffle('x', 0, 'x', 'x'))
+            t_PixRFCouplingX.name = 'PixRFCouplingX'
+            t_PixRFCouplingY.name = 'PixRFCouplingY'
+
+
+            # Matrix of inner products between the images and the retinal RFs
+            # indices: b, j, t
+            # Sum_i2 T(i2, i1) * T(b, i2, j, t) = T(b, i1, j, t)
+            t_IpsY = T.sum(t_S.dimshuffle('x', 0, 1, 'x', 'x') * 
+                            t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3), axis = 1)
+            # Sum_i1 T(b, i1, j, t) * T(b, i2, j, t) = T(b, j, t)
+            t_Ips = T.sum(t_IpsY * t_PixRFCouplingX, axis = 1)
+            t_Ips.name = 'Ips'
+            return t_Ips
+
+
+        self.t_Ips = inner_products(self.t_S, self.t_Var,
+                                    self.t_XS, self.t_YS,
+                                    self.t_XE, self.t_YE,
+                                    self.t_XR, self.t_YR)
+
         self.t_G = T.scalar('G')
 
         # Take dot product of image with an array of gaussians
@@ -212,31 +251,6 @@ class EMBurak:
         # Note in this computation, we do the indices in this form:
         #  b, i, j, t
         #  batch, pixel, neuron, timestep
-        self.t_dX = (self.t_XS.dimshuffle('x', 0, 'x', 'x') 
-                     - self.t_XE.dimshuffle('x', 'x', 0, 'x') 
-                     - self.t_XR.dimshuffle(0, 'x', 'x', 1))
-        self.t_dX.name = 'dX'
-
-        self.t_dY = (self.t_YS.dimshuffle('x', 0, 'x', 'x') 
-                     - self.t_YE.dimshuffle('x', 'x', 0, 'x') 
-                     - self.t_YR.dimshuffle(0, 'x', 'x', 1))
-        self.t_dY.name = 'dY'
-
-        # Use outer product trick to dot product image with point filters
-        self.t_PixRFCouplingX = T.exp(-0.5 * self.t_dX ** 2 / 
-                                       self.t_Var.dimshuffle('x', 0, 'x', 'x'))
-        self.t_PixRFCouplingY = T.exp(-0.5 * self.t_dY ** 2 / 
-                                       self.t_Var.dimshuffle('x', 0, 'x', 'x'))
-        self.t_PixRFCouplingX.name = 'PixRFCouplingX'
-        self.t_PixRFCouplingY.name = 'PixRFCouplingY'
-
-
-        # Matrix of inner products between the images and the retinal RFs
-        # indices: b, j, t
-        self.t_IpsY = T.sum(self.t_S.dimshuffle('x', 0, 1, 'x', 'x') * 
-                            self.t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3), axis = 1)
-        self.t_Ips = T.sum(self.t_IpsY * self.t_PixRFCouplingX, axis = 1)
-        self.t_Ips.name = 'Ips'
         
         # Firing probabilities indexed by
         # b, j, t
@@ -261,8 +275,9 @@ class EMBurak:
         self.t_E_bound.name = 'E_bound'
                     
         if self.sparse_prior:
-            self.t_E_rec = self.t_ALPHA * T.sum((self.t_S.flatten() - 
-                                            T.dot(self.t_A, self.t_D) ) ** 2)                
+            # FIXME: shouldn't access L_I
+            self.t_E_rec = self.t_ALPHA * T.sum((self.t_S - 
+                                            T.dot(self.t_A, self.t_D).reshape((self.L_I, self.L_I)) ) ** 2)  
             self.t_E_rec.name = 'E_bound'
             
             self.t_E_sp =  (self.t_ALPHA * self.t_LAMBDA 
@@ -730,7 +745,7 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    DCs = [1.]#[0.01, 10., 100.]
+    DCs = [0.1]
     for DC in DCs:
         emb = EMBurak(DC = DC, DT = 0.001, N_T = 100, L_N = 9, a = 2.)
         for _ in range(1):
