@@ -39,7 +39,7 @@ class EMBurak:
         
         self.debug = False # If True, show debug images
         self.sparse_prior = True # If true, include sparse prior
-        self.save_mode = False # If true, save results of each EM iteration
+        self.save_mode = True # If true, save results of each EM iteration
         
         # Simulation Parameters
         self.DT = DT # Simulation timestep
@@ -93,10 +93,8 @@ class EMBurak:
         self.XE = self.XE * self.a
         self.YE = self.YE * self.a
         
-        # Pixel values for generating image
+        # Pixel values for generating image (same shape as estimated image)
         self.S_gen = np.zeros((self.L_I, self.L_I)).astype('float32') 
-        # Pixel values of inferred image
-        self.S = np.zeros((self.L_I, self.L_I)).astype('float32')
         # Assumes that the first dimension is 'Y' 
         #    and the second dimension is 'X'
 
@@ -384,7 +382,7 @@ class EMBurak:
             results in spikes at the maximum firing rate
         """
         self.G = 1.
-        Ips, FP = self.RFS(np.ones_like(self.S), self.XR, self.YR, 
+        Ips, FP = self.RFS(np.ones_like(self.S_gen), self.XR, self.YR, 
                            self.L0, self.L1, 
                            self.DT, self.G)
         self.G = (1. / Ips.max()).astype('float32')
@@ -643,7 +641,7 @@ class EMBurak:
         data['XR'] = self.XR
         data['YR'] = self.YR
 
-        data['S'] = self.S
+        data['S'] = self.S_gen
         
         self.data = data
 
@@ -720,7 +718,7 @@ class EMBurak:
 if __name__ == '__main__':
     DCs = [100.]
     for DC in DCs:
-        emb = EMBurak(DC = DC, DT = 0.001, N_T = 100, L_N = 14, a = 1.)
+        emb = EMBurak(DC = DC, DT = 0.001, N_T = 30, L_N = 14, a = 1.)
         for _ in range(1):
             emb.gen_data()        
             emb.run()
