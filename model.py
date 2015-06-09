@@ -23,7 +23,7 @@ from utils.BurakPoissonLP import PoissonLP
 
 class EMBurak:
     def __init__(self, DT = 0.002, DC = 40., N_T = 200,
-                 L_I = 14, L_N = 18, N_L = 49, a = 1., ALPHA = 0.):
+                 L_I = 14, L_N = 18, N_L = 49, a = 1., LAMBDA = 1.):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -50,14 +50,10 @@ class EMBurak:
         # Image Prior Parameters
         self.GAMMA = 100. # Pixel out of bounds cost parameter
 
-        if self.sparse_prior:
-            self.ALPHA  = ALPHA # Prior Strength
-            self.LAMBDA = 0. # Sparsity constant, set when loading dictionary
-            # the sparse prior is ALPHA * ((S-DA) ** 2 + LAMBDA * |A|)
+        self.LAMBDA = LAMBDA # the sparse prior is delta (S-DA) + LAMBDA * |A|
         
         # Problem Dimensions
-        if (self.sparse_prior):
-            self.N_L = N_L # Number of latent sparse factors
+        self.N_L = N_L # Number of latent sparse factors
         self.N_T = N_T # Number of time steps
         self.L_I = L_I # Linear dimension of image
         self.L_N = L_N # Linear dimension of neuron receptive field grid
@@ -97,8 +93,10 @@ class EMBurak:
         self.XE = self.XE * self.a
         self.YE = self.YE * self.a
         
-        # Pixel values
-        self.S = np.zeros((self.L_I, self.L_I)).astype('float32') 
+        # Pixel values for generating image
+        self.S_gen = np.zeros((self.L_I, self.L_I)).astype('float32') 
+        # Pixel values of inferred image
+        self.S = np.zeros((self.L_I, self.L_I)).astype('float32')
         # Assumes that the first dimension is 'Y' 
         #    and the second dimension is 'X'
 
@@ -117,19 +115,16 @@ class EMBurak:
         # Weighting for batches and time points
         self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32') 
         
-        if self.sparse_prior:
-            # Dictionary going from latent factors to image
-            self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  
-            # Sparse Coefficients
-            self.A = np.zeros((self.N_L,)).astype('float32')      
+        # Dictionary going from latent factors to image
+        self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  
+        # Sparse Coefficients
+        self.A = np.zeros((self.N_L,)).astype('float32')      
             
         
         
-        if self.sparse_prior:
-            self.init_dictionary()
+        self.init_dictionary(mode = 'mnist')
             
-        self.init_theano_vars()
-        self.init_theano_funcs()
+        self.init_theano_core()
         self.set_gain_factor()
         
         self.init_image()
@@ -159,52 +154,45 @@ class EMBurak:
             self.save()
 
 
-    def init_dictionary(self):
+    def init_dictionary(self, mode = None):
         """
         Loads in a dictionary
-        Loads the given value of the sparsity penalty
         """
         try:
             data = loadmat('data/mnist_dictionary.mat')
             self.D[:, :] = data['D']
-            self.LAMBDA = data['Alpha'].astype('float32')[0, 0]
         except IOError:
             print 'Need to have a dictionary file'
             raise IOError
 
 
-    def init_theano_vars(self):
+    def init_theano_core(self):
         """
-        Initializes all theano variables
+        Initializes all theano variables and functions
         """
-        # Define Theano Variables
+        # Define Theano Variables Common to Generation and Inference
         self.t_XS = theano.shared(self.XS, 'XS')
         self.t_YS = theano.shared(self.YS, 'YS')
         self.t_XE = theano.shared(self.XE, 'XE')
         self.t_YE = theano.shared(self.YE, 'YE')
         self.t_Var = theano.shared(self.Var, 'Var')
 
-        # dims are i2, i1
-        self.t_S = theano.shared(self.S, 'S')
-        self.t_S_gen = T.matrix('S_gen')
+
         self.t_XR = T.matrix('XR')
         self.t_YR = T.matrix('YR')
         self.t_R = T.matrix('R')
-        if self.sparse_prior:
-            self.t_D = theano.shared(self.D, 'D')
-            self.t_A = theano.shared(self.A, 'A')
 
-        self.t_Wbt = T.matrix('Wbt')
 
-        # Theano Parameters
+
+
+        #  Parameters
         self.t_L0 = T.scalar('L0')
         self.t_L1 = T.scalar('L1')
         self.t_DT = T.scalar('DT')
         self.t_DC = T.scalar('DC')
-        self.t_GAMMA = T.scalar('GAMMA')
-        if self.sparse_prior:
-            self.t_ALPHA = T.scalar('ALPHA')
-            self.t_LAMBDA = T.scalar('LAMBDA')
+
+        self.t_G = T.scalar('G')
+
         
 
         def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
@@ -265,16 +253,37 @@ class EMBurak:
 
             t_FP = T.switch(t_FP_0 > 0.9, 0.9, t_FP_0)
             return t_FP
-            
-        self.t_Ips = inner_products(self.t_S, self.t_Var,
-                                    self.t_XS, self.t_YS,
-                                    self.t_XE, self.t_YE,
-                                    self.t_XR, self.t_YR)
+        
+        # Simulated Spike Generation
+        
+        self.t_S_gen = T.matrix('S_gen') # Image dims are i2, i1
+
+        self.t_Ips_gen = inner_products(self.t_S_gen, self.t_Var,
+                                        self.t_XS, self.t_YS,
+                                        self.t_XE, self.t_YE,
+                                        self.t_XR, self.t_YR)
+
+        self.t_FP_gen = firing_prob(self.t_Ips_gen, self.t_G, 
+                                    self.t_L0, self.t_L1, self.t_DT)
+
+        # Computes image-RF inner products and the resulting firing probabilities
+        self.RFS = theano.function(inputs = [self.t_S_gen, self.t_XR, self.t_YR,
+                                             self.t_L0, self.t_L1, 
+                                             self.t_DT, self.t_G],
+                                   outputs = [self.t_Ips_gen, self.t_FP_gen])
+
+        self.rng = T.shared_randomstreams.RandomStreams(seed = 10)
+        self.t_R_gen = (self.rng.uniform(size = self.t_FP_gen.shape) 
+                        < self.t_FP_gen).astype('float32')
 
 
-        self.t_G = T.scalar('G')
+        self.spikes = theano.function(inputs = [self.t_S_gen, self.t_XR, self.t_YR,
+                                                self.t_L0, self.t_L1, 
+                                                self.t_DT, self.t_G],
+                                      outputs = self.t_R_gen)
+        
 
-        self.t_FP = firing_prob(self.t_Ips, self.t_G, self.t_L0, self.t_L1, self.t_DT)
+        # Latent Variable Estimation
 
         def spiking_cost(t_R, t_FP):
             """
@@ -283,14 +292,35 @@ class EMBurak:
             t_FP - Firing probabilities in form b, j, t
             Returns -log p(R|X,S) with indices in the form b, j, t
             """
-            t_E_R = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP) 
+            t_E_R_f = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP) 
                      + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
-            return t_E_R
+            t_E_R_f.name = 'E_R_f'
+            return t_E_R_f
+        
+
+        self.t_A = theano.shared(self.A, 'A')
+        self.t_D = theano.shared(self.D, 'D')
+        self.t_S = T.dot(self.t_A, self.t_D).reshape((self.L_I, self.L_I))
+        # FIXME: shouldn't access L_I, Image dims are i2, i1
+
+        self.t_GAMMA = T.scalar('GAMMA')
+        self.t_LAMBDA = T.scalar('LAMBDA')
+
+        
+        self.t_Wbt = T.matrix('Wbt')
+
+        self.t_Ips = inner_products(self.t_S, self.t_Var,
+                                    self.t_XS, self.t_YS,
+                                    self.t_XE, self.t_YE,
+                                    self.t_XR, self.t_YR)
+
+        self.t_FP = firing_prob(self.t_Ips, self.t_G, 
+                                self.t_L0, self.t_L1, self.t_DT)
 
         # Compute Energy Functions (negative log-likelihood) to minimize
+        self.t_E_R_f = spiking_cost(self.t_R, self.t_FP)
         # Note energy is weighted in time and batch by W_bt (used by particle filter)
-        self.t_E_R = T.sum(T.sum(spiking_cost(self.t_R, self.t_FP), axis = 1) 
-                                  * self.t_Wbt)
+        self.t_E_R = T.sum(T.sum(self.t_E_R_f, axis = 1)  * self.t_Wbt)
         self.t_E_R.name = 'E_R'
 
         self.t_E_bound = self.t_GAMMA * (
@@ -298,65 +328,26 @@ class EMBurak:
                         T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0)))
         self.t_E_bound.name = 'E_bound'
                     
-        if self.sparse_prior:
-            # FIXME: shouldn't access L_I
-            self.t_E_rec = self.t_ALPHA * T.sum((self.t_S - 
-                                            T.dot(self.t_A, self.t_D).reshape((self.L_I, self.L_I)) ) ** 2)  
-            self.t_E_rec.name = 'E_bound'
-            
-            self.t_E_sp =  (self.t_ALPHA * self.t_LAMBDA 
-                            * T.sum(T.abs_(self.t_A)))
-            self.t_E_sp.name = 'E_sp'
 
-
-        self.t_E = self.t_E_R + self.t_E_bound
+        self.t_E_sp = self.t_LAMBDA * T.sum(T.abs_(self.t_A))
+        self.t_E_sp.name = 'E_sp'
         
-        if self.sparse_prior:
-            self.t_E = self.t_E + self.t_E_rec + self.t_E_sp
-         
+        self.t_E = self.t_E_R + self.t_E_bound + self.t_E_sp
         self.t_E.name = 'E'
 
-        # Auxiliary Theano Variables
-
         # Cost from poisson terms separated by batches for particle filter log probability
-        self.t_E_R_b = -T.sum(self.t_R.dimshuffle('x', 0, 1) 
-                              * T.log(self.t_FP) 
-                              + (1 - self.t_R.dimshuffle('x', 0, 1)) 
-                              * T.log(1 - self.t_FP), axis = (1, 2))
+        self.t_E_R_b = T.sum(self.t_E_R_f, axis = (1, 2))
 
-        # Generate Spikes
-        self.rng = T.shared_randomstreams.RandomStreams(seed = 10)
-        self.t_R_gen = (self.rng.uniform(size = self.t_FP.shape) 
-                        < self.t_FP).astype('float32')
-
-    def init_theano_funcs(self):
-        # Computes image-RF inner products and the resulting firing probabilities
-        self.RFS = theano.function(inputs = [self.t_XR, self.t_YR,
-                                             self.t_L0, self.t_L1, 
-                                             self.t_DT, self.t_G],
-                                   outputs = [self.t_Ips, self.t_FP])
-
-
-        # Initially generate spikes
-        self.spikes = theano.function(inputs = [self.t_XR, self.t_YR,
-                                                self.t_L0, self.t_L1, 
-                                                self.t_DT, self.t_G],
-                                      outputs = self.t_R_gen)
+        self.image_est = theano.function(inputs = [], outputs = self.t_S)
         
         # Generate costs given a path, spikes, and time-batch weights
         
-        inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
-                  self.t_L0, self.t_L1, self.t_DT, self.t_G, 
-                  self.t_GAMMA]
-        outputs = [self.t_E, self.t_E_bound, self.t_E_R]          
-        
-        if self.sparse_prior:
-            inputs.append(self.t_ALPHA)
-            inputs.append(self.t_LAMBDA) 
-            outputs.append(self.t_E_rec)
-            outputs.append(self.t_E_sp)
-            
-        self.costs = theano.function(inputs = inputs, outputs = outputs)
+        energy_outputs = [self.t_E, self.t_E_bound, self.t_E_R, self.t_E_sp]          
+                    
+        self.costs = theano.function(inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
+                                               self.t_L0, self.t_L1, self.t_DT, self.t_G, 
+                                               self.t_GAMMA, self.t_LAMBDA], 
+                                     outputs = energy_outputs)
 
 
         # Returns the energy E_R = -log P(R|X,S) separated by batches
@@ -374,34 +365,16 @@ class EMBurak:
         self.t_Eps = T.scalar('Eps')
         self.t_ada_params = (self.t_Rho, self.t_Eps)
 
-        self.s_grad_updates = ada_delta(self.t_E, self.t_S, *self.t_ada_params)
-        self.t_S_Eg2, self.t_S_EdS2, _ = self.s_grad_updates.keys()
-        
-        if self.sparse_prior:
-            self.a_grad_updates = ada_delta(self.t_E, self.t_A, 
-                                            *self.t_ada_params)
-            self.t_A_Eg2, self.t_A_EdS2, _ = self.a_grad_updates.keys()
-        
-        self.grad_updates = OrderedDict()        
-        for key in self.s_grad_updates.keys():
-            self.grad_updates[key] = self.s_grad_updates[key]
-
-        if self.sparse_prior:
-            for key in self.a_grad_updates.keys():
-                self.grad_updates[key] = self.a_grad_updates[key]
-        
+        self.grad_updates = ada_delta(self.t_E, self.t_A, 
+                                        *self.t_ada_params)
+        self.t_A_Eg2, self.t_A_EdS2, _ = self.grad_updates.keys()
         
         inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
                   self.t_L0, self.t_L1, self.t_DT, self.t_G, 
-                  self.t_GAMMA, self.t_Rho, self.t_Eps]
-        if self.sparse_prior:
-            inputs.append(self.t_ALPHA)
-            inputs.append(self.t_LAMBDA)
-        
-        # Use the same outputs as before
+                  self.t_GAMMA, self.t_LAMBDA, self.t_Rho, self.t_Eps]
         
         self.img_grad = theano.function(inputs = inputs,
-                                        outputs = outputs,
+                                        outputs = energy_outputs,
                                         updates = self.grad_updates)
 
         
@@ -411,8 +384,7 @@ class EMBurak:
             results in spikes at the maximum firing rate
         """
         self.G = 1.
-        self.t_S.set_value(np.ones_like(self.S))
-        Ips, FP = self.RFS(self.XR, self.YR, 
+        Ips, FP = self.RFS(np.ones_like(self.S), self.XR, self.YR, 
                            self.L0, self.L1, 
                            self.DT, self.G)
         self.G = (1. / Ips.max()).astype('float32')
@@ -443,8 +415,7 @@ class EMBurak:
         #self.ig.make_big_E()
         self.ig.make_digit()
         self.ig.normalize()
-        self.S = self.ig.img
-        self.t_S.set_value(self.S)
+        self.S_gen = self.ig.img
         if (self.debug):
             self.ig.plot()
 
@@ -498,8 +469,7 @@ class EMBurak:
         """
         Generate LGN responses given the path and the image
         """
-        self.t_S.set_value(self.S)
-        self.R = self.spikes(self.XR, self.YR, self.L0, 
+        self.R = self.spikes(self.S_gen, self.XR, self.YR, self.L0, 
                              self.L1, self.DT, self.G)[0]
         print 'Mean firing rate ' + str(self.R.mean() / self.DT)
 
@@ -511,20 +481,13 @@ class EMBurak:
         Note that the energy is normalized by the number of timesteps
         """
         print 'Pre-EM testing'
-        self.t_S.set_value(self.S)
-        # FIXME: different number of args for sparse_prior
         args = (self.XR, self.YR, self.R, self.Wbt, 
                 self.L0, self.L1, self.DT, self.G, 
-                self.GAMMA)
-        if self.sparse_prior:
-            args = args + (self.ALPHA, self.LAMBDA)        
+                self.GAMMA, self.LAMBDA)        
         
         out = self.costs(*args)
         
-        if self.sparse_prior:
-            E, E_bound, E_R, E_rec, E_sp = out
-        else: 
-            E, E_bound, E_R = out        
+        E, E_bound, E_R, E_rec, E_sp = out
         print 'Costs of underlying data ' + str((E/self.N_T, E_rec/self.N_T))
 
 
@@ -532,9 +495,7 @@ class EMBurak:
         """
         Resets the value of the image as stored on the GPU
         """
-        self.t_S.set_value(0.5 + np.zeros(self.S.shape).astype('float32'))
-        if self.sparse_prior:
-            self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
             
    
     def run_E(self, t):
@@ -545,8 +506,6 @@ class EMBurak:
         """
         if (t > self.N_T): 
             raise IndexError('Maximum simulated timesteps exceeded in E step')
-        #self.pf.run(self.R.transpose()[0:t], self.N_P)
-
         while (self.pf.t < t):
             self.pf.advance()
         self.pf.calculate_means_sdevs()
@@ -559,12 +518,8 @@ class EMBurak:
         Resets auxillary gradient descent variables for the M step
             eg. for ADADelta, we reset the RMS of dx and g
         """
-        self.t_S_Eg2.set_value(np.zeros_like(self.S).astype('float32'))
-        self.t_S_EdS2.set_value(np.zeros_like(self.S).astype('float32'))
-        
-        if self.sparse_prior:
-            self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
-            self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
         
         
     
@@ -582,13 +537,11 @@ class EMBurak:
                     self.pf.XS[0:t, :, 1].transpose(),
                     self.R[:, 0:t], self.pf.WS[0:t].transpose(),
                     self.L0, self.L1, self.DT, 
-                    self.G, self.GAMMA,
+                    self.G, self.GAMMA, self.LAMBDA,
                     self.Rho, self.Eps)
-            if self.sparse_prior:
-                args = args + (self.ALPHA, self.LAMBDA)
-            
+                    
             out = self.img_grad(*args)
-            self.img_SNR = SNR(self.S, self.t_S.get_value())
+            self.img_SNR = SNR(self.S_gen, self.image_est())
         
         print self.print_costs(out, t) + str(self.img_SNR)
 
@@ -641,10 +594,9 @@ class EMBurak:
             iteration_data['time_steps'] = t
             iteration_data['path_means'] = self.pf.means
             iteration_data['path_sdevs'] = self.pf.sdevs
-            iteration_data['image_est'] = self.t_S.get_value()
+            iteration_data['image_est'] = self.image_est()
             
-            if self.sparse_prior:
-                iteration_data['coeff_est'] = self.t_A.get_value()
+            iteration_data['coeff_est'] = self.t_A.get_value()
             
             EM_data[u] = iteration_data
             
@@ -663,11 +615,9 @@ class EMBurak:
         data['L1'] = self.L1
         data['GAMMA'] = self.GAMMA
         
-        if self.sparse_prior:
-            data['ALPHA'] = self.ALPHA
-            data['LAMBDA'] = self.LAMBDA
-            data['D'] = self.D
-            data['N_L'] = self.N_L
+        data['LAMBDA'] = self.LAMBDA
+        data['D'] = self.D
+        data['N_L'] = self.N_L
         
         data['a'] = self.a
 
@@ -716,21 +666,20 @@ class EMBurak:
         vmax = 1.
         plt.subplot(1, 3, 1)
         plt.title('Estimate')
-        plt.imshow(self.t_S.get_value().reshape(self.L_I, self.L_I), 
+        plt.imshow(self.image_est(),
                    cmap = plt.cm.gray, 
                    interpolation = 'nearest', 
                    vmin = vmin, vmax = vmax)
         plt.colorbar()
         plt.subplot(1, 3, 2)
         plt.title('Actual')
-        plt.imshow(self.S.reshape(self.L_I, self.L_I), cmap = plt.cm.gray, 
+        plt.imshow(self.S_gen, cmap = plt.cm.gray, 
                    interpolation = 'nearest',
                    vmin = vmin, vmax = vmax)
         plt.colorbar()
         plt.subplot(1, 3, 3)
         plt.title('Error')
-        plt.imshow(np.abs(self.t_S.get_value() 
-                          - self.S).reshape(self.L_I, self.L_I), 
+        plt.imshow(np.abs(self.S_gen - self.image_est()),
                    cmap = plt.cm.gray, interpolation = 'nearest')
         plt.colorbar()
         plt.show()
@@ -769,10 +718,11 @@ class EMBurak:
  
 
 if __name__ == '__main__':
-    DCs = [0.1]
+    DCs = [100.]
     for DC in DCs:
         emb = EMBurak(DC = DC, DT = 0.001, N_T = 100, L_N = 14, a = 1.)
         for _ in range(1):
             emb.gen_data()        
             emb.run()
     
+    emb.plot_image_estimate()
