@@ -22,8 +22,8 @@ from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
-    def __init__(self, DT = 0.002, DC = 40., N_T = 200,
-                 L_I = 14, L_N = 18, N_L = 49, a = 1., LAMBDA = 1.):
+    def __init__(self, DT = 0.001, DC = 100., N_T = 50,
+                 L_I = 14, L_N = 14, N_L = 49, a = 1., LAMBDA = 1.):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -238,7 +238,7 @@ class EMBurak:
             t_Ips.name = 'Ips'
             return t_Ips
 
-
+        self.inner_products = inner_products
       
         def firing_prob(t_Ips, t_G, t_L0, t_L1, t_DT):
             # Firing probabilities indexed by b, j, t
@@ -252,6 +252,8 @@ class EMBurak:
             t_FP = T.switch(t_FP_0 > 0.9, 0.9, t_FP_0)
             return t_FP
         
+        self.firing_prob = firing_prob
+
         # Simulated Spike Generation
         
         self.t_S_gen = T.matrix('S_gen') # Image dims are i2, i1
@@ -294,7 +296,8 @@ class EMBurak:
                      + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
             t_E_R_f.name = 'E_R_f'
             return t_E_R_f
-        
+
+        self.spiking_cost = spiking_cost
 
         self.t_A = theano.shared(self.A, 'A')
         self.t_D = theano.shared(self.D, 'D')
@@ -641,7 +644,7 @@ class EMBurak:
         data['XR'] = self.XR
         data['YR'] = self.YR
 
-        data['S'] = self.S_gen
+        data['S_gen'] = self.S_gen
         
         self.data = data
 
@@ -718,7 +721,7 @@ class EMBurak:
 if __name__ == '__main__':
     DCs = [100.]
     for DC in DCs:
-        emb = EMBurak(DC = DC, DT = 0.001, N_T = 30, L_N = 14, a = 1.)
+        emb = EMBurak(DC = DC, DT = 0.001, N_T = 40, L_N = 10, a = 1.5)
         for _ in range(1):
             emb.gen_data()        
             emb.run()

@@ -57,12 +57,12 @@ class DataAnalyzer:
 
         self.XR = self.data['XR'][0]
         self.YR = self.data['YR'][0]
-        self.S = self.data['S']
+        self.S_gen = self.data['S_gen']
         self.N_itr = self.data['N_itr']
         self.Var = self.data['Var'][0]
         self.DC = self.data['DC']
         self.L_I = self.data['L_I']
-
+        self.LAMBDA = self.data['LAMBDA']
 
         # Convert retinal positions to grid
         XS = self.data['XS']
@@ -85,7 +85,7 @@ class DataAnalyzer:
         data = pkl.load(open(filename, 'rb'))
         return cls(data)
 
-    def SNR_idx(self, q, sparse_est = True):
+    def SNR_idx(self, q):
         """
         Calculates the SNR between the ground truth and the 
             image produced after iteration q of the EM
@@ -95,10 +95,7 @@ class DataAnalyzer:
             fixes. )
         """
         XYR_est = self.data['EM_data'][q]['path_means']
-        if sparse_est:
-            S_est = self.get_sparse_reconstruction(q)
-        else:
-            S_est = self.data['EM_data'][q]['image_est']
+        S_est = self.data['EM_data'][q]['image_est']
         t = self.data['EM_data'][q]['time_steps']
 
         XR_est = XYR_est[:, 0]
@@ -111,15 +108,15 @@ class DataAnalyzer:
         self.dx = dx
         self.dy = dy
 
-        return SNR(self.S.ravel(), self.XS, self.YS, 
+        return SNR(self.S_gen.ravel(), self.XS, self.YS, 
                    S_est.ravel(), self.XS + dx, self.YS + dy, 
                    self.var)
 
-    def SNR_list(self, sparse_est = True):
+    def SNR_list(self):
         """
         Returns a list giving the SNR after each iteration
         """
-        return [self.SNR_idx(q, sparse_est) for q in range(self.N_itr)]
+        return [self.SNR_idx(q) for q in range(self.N_itr)]
 
 
     def plot_path_estimate(self, q, d):
@@ -156,17 +153,6 @@ class DataAnalyzer:
         #plt.legend()
         plt.title(label + ' Pos., shift = %.2f' % dxy)
 
-    def get_sparse_reconstruction(self, q):
-        """
-        Returns the sparse reconstruction of the image after iteration q
-        """
-        if not self.sparse_prior:
-            raise RuntimeError('Data did not use a sparse prior')
-        A = self.data['EM_data'][q]['coeff_est']
-        D = self.data['D']
-        return np.dot(A[np.newaxis, :], D).reshape(self.L_I, self.L_I)
-
-
     def plot_EM_estimate(self, q):
         """
         Creates a full plot of the estimated image, actual image, 
@@ -178,26 +164,25 @@ class DataAnalyzer:
         if (q >= self.N_itr):
             raise ValueError('Iteration index, q, is too large')
         
-        m1 = np.min(self.S)
-        m2 = np.max(self.S)
+        m1 = np.min(self.S_gen)
+        m2 = np.max(self.S_gen)
     
         vmin = -0.1 * (m2 - m1) + m1
         vmax = m2 + 0.1 * (m2 - m1)
     
-    
-        sdev = float(np.sqrt(self.Var))
-    
+        sdev = float(np.sqrt(self.Var))    
         dt = self.DT * self.data['EM_data'][q]['time_steps'] * 1000.
-        fig = plt.figure(figsize = (15, 8))
-        fig.suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f, ALPHA = %0.2f' % (dt, self.DC, self.ALPHA))
+
+        fig = plt.figure(figsize = (10, 8))
+        fig.suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f, LAMBDA = %0.2f' % (dt, self.DC, self.LAMBDA))
         
         # Note actual image is convolved with a gaussian during the simulation 
         #   even though the image saved has not has this happen yet
 
 
-        plt.subplot(2, 3, 1)
-        plt.title('Estimated Image, S: SNR = %.2f' 
-                  % self.SNR_idx(q, sparse_est = False))
+        plt.subplot(2, 2, 1)
+        plt.title('Estimated Image, S = DA: SNR = %.2f' 
+                  % self.SNR_idx(q))
         S_est = self.data['EM_data'][q]['image_est']
 
         plt.imshow(gaussian_filter(S_est, sdev), 
@@ -206,28 +191,17 @@ class DataAnalyzer:
         plt.colorbar()
 
 
-        plt.subplot(2, 3, 2)
-
-        S_sp = self.get_sparse_reconstruction(q)
-        plt.title('Estimated Image, DA:  SNR = %.2f' 
-                  % self.SNR_idx(q, sparse_est = True))
-        plt.imshow(gaussian_filter(S_sp, sdev), 
-                   cmap = plt.cm.gray, interpolation = 'nearest', 
-                   vmin = vmin, vmax = vmax)
-        plt.colorbar()
-        
-    
-        plt.subplot(2, 3, 3)
+        plt.subplot(2, 2, 2)
         plt.title('Actual Image')
-        plt.imshow(gaussian_filter(self.S, sdev), 
+        plt.imshow(gaussian_filter(self.S_gen, sdev), 
                    cmap = plt.cm.gray, interpolation = 'nearest',
                    vmin = vmin, vmax = vmax)
         plt.colorbar()
     
-        plt.subplot(2, 3, 4)
+        plt.subplot(2, 2, 3)
         self.plot_path_estimate(q, 0)
 
-        plt.subplot(2, 3, 5)
+        plt.subplot(2, 2, 4)
         self.plot_path_estimate(q, 1)
 
         plt.tight_layout()
@@ -247,8 +221,9 @@ if __name__ == '__main__':
     for filename in filenames:
 
         da = DataAnalyzer.fromfilename(dir + filename)
-        SNRs = da.SNR_list(True)
+        SNRs = da.SNR_list()
         print SNRs
-
+        da.plot_EM_estimate(8)
+        plt.show()
 #plt.plot(SNRs)
 #plt.show()
