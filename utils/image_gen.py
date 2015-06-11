@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 from scipy.io import loadmat
 
 class ImageGenerator:
-    def __init__(self, _L_I):
+    def __init__(self, L_I):
         """
         L_I - linear dimension of image
         """
-        self.L_I = _L_I
+        self.L_I = L_I
         self.reset_img()
         
     def reset_img(self):
@@ -22,13 +22,27 @@ class ImageGenerator:
         self.img[self.L_I / 2, self.L_I / 2] = 1.
     
     
-    def make_digit(self):
+    def make_digit(self, mode = 'fixed'):
+        """
+        Makes the image a MNIST digit
+        mode - 'fixed' gives you a particular 0
+             - 'random' gives you a random digit
+        """
+        if self.L_I != 14:
+            raise ValueError('To create a digit, L_I = 14')
+
         try:
             data = loadmat('data/mnist_small.mat')
             IMAGES = data['IMAGES']
             K, self.L_I, _ = IMAGES.shape
-            #k = np.random.randint(K)
-            k = 37 # Chose a particular image that will work well
+            
+            if mode == 'fixed':
+                k = 37 # Chose a particular image that will work well
+            elif mode == 'random':
+                k = np.random.randint(K)
+            else:
+                raise ValueError('unrecognized mode')
+
             self.reset_img()
             self.img[:, :] = IMAGES[k]
         except IOError, e:
