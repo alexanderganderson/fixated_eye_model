@@ -22,25 +22,36 @@ from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
-    def __init__(self, DT = 0.001, DC = 100., N_T = 50,
-                 L_I = 14, L_N = 14, N_L = 49, a = 1., LAMBDA = 1.):
+    def __init__(self, S_gen, D, DT = 0.001, DC = 100., N_T = 50,
+                 L_N = 14, a = 1., LAMBDA = 1.):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
-            -- Initializes Dictionary (if using sparse prior)
-            -- Defines relevant theano variables
-            -- Compiles theano functions
+            -- Initializes Dictionary
+            -- Compiles the theano backend
             -- Sets the gain factor for the spikes
-            -- Initializes the Image
             -- Initializes the object that generates the paths
             -- Initializes the Particle Filter object
             -- Checks that the output directory exists
+
+        S_gen - image that generates the spikes - (L_I, L_I)
+        D - dictionary used to infer latent factors, shape = (N_L, N_pix)
+        checks for consistency L_I ** 2 = N_pix
         """
         
         self.debug = False # If True, show debug images
-        self.sparse_prior = True # If true, include sparse prior
         self.save_mode = True # If true, save results of each EM iteration
-        
+
+        self.D = D
+        #N_L - number of latent factors
+        #N_pix - number of pixels in the image
+        self.N_L, self.N_Pix = D.shape
+
+        self.S_gen = S_gen
+        self.L_I = S_gen.shape[0]
+        if not self.L_I ** 2 == self.N_Pix:
+            raise ValueError('Mismatch between dictionary and image size')
+
         # Simulation Parameters
         self.DT = DT # Simulation timestep
         self.DC = DC  # Diffusion Constant
@@ -53,9 +64,9 @@ class EMBurak:
         self.LAMBDA = LAMBDA # the sparse prior is delta (S-DA) + LAMBDA * |A|
         
         # Problem Dimensions
-        self.N_L = N_L # Number of latent sparse factors
+#        self.N_L = N_L # Number of latent sparse factors
         self.N_T = N_T # Number of time steps
-        self.L_I = L_I # Linear dimension of image
+#        self.L_I = L_I # Linear dimension of image
         self.L_N = L_N # Linear dimension of neuron receptive field grid
 
         self.N_B = 1 # Number of batches of data (must be 1)
@@ -94,7 +105,7 @@ class EMBurak:
         self.YE = self.YE * self.a
         
         # Pixel values for generating image (same shape as estimated image)
-        self.S_gen = np.zeros((self.L_I, self.L_I)).astype('float32') 
+#        self.S_gen = np.zeros((self.L_I, self.L_I)).astype('float32') 
         # Assumes that the first dimension is 'Y' 
         #    and the second dimension is 'X'
 
@@ -114,18 +125,15 @@ class EMBurak:
         self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32') 
         
         # Dictionary going from latent factors to image
-        self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  
+#        self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  
+
         # Sparse Coefficients
         self.A = np.zeros((self.N_L,)).astype('float32')      
             
-        
-        
-        self.init_dictionary(mode = 'mnist')
-            
+
         self.init_theano_core()
         self.set_gain_factor()
         
-        self.init_image()
         self.init_path_generator()
         
         if (self.save_mode):
@@ -152,18 +160,6 @@ class EMBurak:
             self.save()
 
 
-    def init_dictionary(self, mode = None):
-        """
-        Loads in a dictionary
-        """
-        try:
-            data = loadmat('data/mnist_dictionary.mat')
-            self.D[:, :] = data['D']
-        except IOError:
-            print 'Need to have a dictionary file'
-            raise IOError
-
-
     def init_theano_core(self):
         """
         Initializes all theano variables and functions
@@ -181,8 +177,6 @@ class EMBurak:
         self.t_R = T.matrix('R')
 
 
-
-
         #  Parameters
         self.t_L0 = T.scalar('L0')
         self.t_L1 = T.scalar('L1')
@@ -192,7 +186,6 @@ class EMBurak:
         self.t_G = T.scalar('G')
 
         
-
         def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
             # Take dot product of image with an array of gaussians
             # t_S - theano image variable dimensions i2, i1
@@ -408,18 +401,6 @@ class EMBurak:
                                     self.R.transpose(), self.N_P)
 
 
-    def init_image(self):
-        """
-        Initialize the Image
-        """
-        self.ig = ImageGenerator(self.L_I)
-        #self.ig.make_big_E()
-        self.ig.make_digit()
-        self.ig.normalize()
-        self.S_gen = self.ig.img
-        if (self.debug):
-            self.ig.plot()
-
     def init_output_dir(self):
         """
         Create an output directory 
@@ -438,6 +419,7 @@ class EMBurak:
         Initialize the path generator
         """
         self.c = Center(self.L_I, self.DC, self.DT)
+
         
     def gen_path(self):
         """
@@ -581,7 +563,7 @@ class EMBurak:
         print 'Running full EM'
         
         for u in range(self.N_itr):
-            t = self.N_T * (u + 1) / self.N_itr #t = self.N_T
+            t = self.N_T * (u + 1) / self.N_itr
             print ('Iteration number ' + str(u) + 
                    ' Running up time time = ' + str(t))
             
@@ -609,7 +591,6 @@ class EMBurak:
         """
         
         data = {}
-        data['sparse_prior'] = self.sparse_prior
         data['DT'] = self.DT
         data['DC'] = self.DC
         data['L0'] = self.L0
@@ -716,14 +697,3 @@ class EMBurak:
 #        self.Ips, self.FP = self.RFS(self.XR, self.YR, 
 #                                     self.L0, self.L1, 
 #                                     self.DT, self.G)
- 
-
-if __name__ == '__main__':
-    DCs = [100.]
-    for DC in DCs:
-        emb = EMBurak(DC = DC, DT = 0.001, N_T = 40, L_N = 10, a = 1.5)
-        for _ in range(1):
-            emb.gen_data()        
-            emb.run()
-    
-    emb.plot_image_estimate()
