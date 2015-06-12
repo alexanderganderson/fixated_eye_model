@@ -133,7 +133,6 @@ class EMBurak:
 
         self.init_theano_core()
         self.set_gain_factor()
-        
         self.init_path_generator()
         
         if (self.save_mode):
@@ -149,6 +148,7 @@ class EMBurak:
         self.gen_spikes()
         self.build_param_and_data_dict()
         self.init_particle_filter()
+
              
     def run(self):
         """
@@ -171,21 +171,17 @@ class EMBurak:
         self.t_YE = theano.shared(self.YE, 'YE')
         self.t_Var = theano.shared(self.Var, 'Var')
 
-
         self.t_XR = T.matrix('XR')
         self.t_YR = T.matrix('YR')
         self.t_R = T.matrix('R')
-
 
         #  Parameters
         self.t_L0 = T.scalar('L0')
         self.t_L1 = T.scalar('L1')
         self.t_DT = T.scalar('DT')
         self.t_DC = T.scalar('DC')
-
         self.t_G = T.scalar('G')
 
-        
         def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
             """
             Take dot product of image with an array of gaussians
@@ -258,12 +254,10 @@ class EMBurak:
         # Simulated Spike Generation
         
         self.t_S_gen = T.matrix('S_gen') # Image dims are i2, i1
-
         self.t_Ips_gen, _ = inner_products(self.t_S_gen, self.t_Var,
                                         self.t_XS, self.t_YS,
                                         self.t_XE, self.t_YE,
                                         self.t_XR, self.t_YR)
-
         self.t_FP_gen = firing_prob(self.t_Ips_gen, self.t_G, 
                                     self.t_L0, self.t_L1, self.t_DT)
 
@@ -272,7 +266,6 @@ class EMBurak:
                                              self.t_L0, self.t_L1, 
                                              self.t_DT, self.t_G],
                                    outputs = [self.t_Ips_gen, self.t_FP_gen])
-
         self.rng = T.shared_randomstreams.RandomStreams(seed = 10)
         self.t_R_gen = (self.rng.uniform(size = self.t_FP_gen.shape) 
                         < self.t_FP_gen).astype('float32')
@@ -283,7 +276,6 @@ class EMBurak:
                                                 self.t_DT, self.t_G],
                                       outputs = self.t_R_gen)
         
-
         # Latent Variable Estimation
 
         def spiking_cost(t_R, t_FP):
@@ -303,25 +295,24 @@ class EMBurak:
         self.t_A = theano.shared(self.A, 'A')
         self.t_D = theano.shared(self.D, 'D')
         self.t_S = T.dot(self.t_A, self.t_D).reshape((self.L_I, self.L_I))
+        self.image_est = theano.function(inputs = [], outputs = self.t_S)
         # FIXME: shouldn't access L_I, Image dims are i2, i1
 
         self.t_GAMMA = T.scalar('GAMMA')
         self.t_LAMBDA = T.scalar('LAMBDA')
 
-        
-        self.t_Wbt = T.matrix('Wbt')
-
         self.t_Ips, _ = inner_products(self.t_S, self.t_Var,
-                                    self.t_XS, self.t_YS,
-                                    self.t_XE, self.t_YE,
-                                    self.t_XR, self.t_YR)
+                                       self.t_XS, self.t_YS,
+                                       self.t_XE, self.t_YE,
+                                       self.t_XR, self.t_YR)
 
         self.t_FP = firing_prob(self.t_Ips, self.t_G, 
                                 self.t_L0, self.t_L1, self.t_DT)
 
         # Compute Energy Functions (negative log-likelihood) to minimize
+        self.t_Wbt = T.matrix('Wbt') # Weights (batch, timestep) from particle filter
         self.t_E_R_f = spiking_cost(self.t_R, self.t_FP)
-        # Note energy is weighted in time and batch by W_bt (used by particle filter)
+
         self.t_E_R = T.sum(T.sum(self.t_E_R_f, axis = 1)  * self.t_Wbt)
         self.t_E_R.name = 'E_R'
 
@@ -339,27 +330,18 @@ class EMBurak:
 
         # Cost from poisson terms separated by batches for particle filter log probability
         self.t_E_R_b = T.sum(self.t_E_R_f, axis = (1, 2))
-
-        self.image_est = theano.function(inputs = [], outputs = self.t_S)
-        
-        # Generate costs given a path, spikes, and time-batch weights
-        
-        energy_outputs = [self.t_E, self.t_E_bound, self.t_E_R, self.t_E_sp]          
-                    
-        self.costs = theano.function(inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
-                                               self.t_L0, self.t_L1, self.t_DT, self.t_G, 
-                                               self.t_GAMMA, self.t_LAMBDA], 
-                                     outputs = energy_outputs)
-
-
-        # Returns the energy E_R = -log P(R|X,S) separated by batches
-        # Function for the particle filter
         self.spike_energy = theano.function(inputs = [self.t_XR, self.t_YR, 
                                                       self.t_R,
                                                       self.t_L0, self.t_L1, 
                                                       self.t_DT, self.t_G],
                                             outputs = self.t_E_R_b)
 
+        # Generate costs given a path, spikes, and time-batch weights        
+        energy_outputs = [self.t_E, self.t_E_bound, self.t_E_R, self.t_E_sp]          
+        self.costs = theano.function(inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
+                                               self.t_L0, self.t_L1, self.t_DT, self.t_G, 
+                                               self.t_GAMMA, self.t_LAMBDA], 
+                                     outputs = energy_outputs)
 
 
         # Define theano variables for gradient descent
@@ -367,8 +349,7 @@ class EMBurak:
         self.t_Eps = T.scalar('Eps')
         self.t_ada_params = (self.t_Rho, self.t_Eps)
 
-        self.grad_updates = ada_delta(self.t_E, self.t_A, 
-                                        *self.t_ada_params)
+        self.grad_updates = ada_delta(self.t_E, self.t_A, *self.t_ada_params)
         self.t_A_Eg2, self.t_A_EdS2, _ = self.grad_updates.keys()
         
         inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
@@ -379,7 +360,6 @@ class EMBurak:
                                         outputs = energy_outputs,
                                         updates = self.grad_updates)
 
-        
     def set_gain_factor(self):
         """
         Sets the gain factor so that an image with pixels of intensity 1
@@ -407,7 +387,6 @@ class EMBurak:
                        self.DT, self.G, self.spike_energy)
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp, 
                                     self.R.transpose(), self.N_P)
-
 
     def init_output_dir(self):
         """
@@ -505,7 +484,7 @@ class EMBurak:
         Runs the maximization step for the first t time steps
         resets the values of auxillary gradient descent variables at start
         t - number of time steps
-        result is saved in t_S.get_value()
+        result is saved in t_A.get_value()
         """
         self.reset_M_aux()
         print 'Spike Energy / t | Bound. Energy / t | SNR' 
@@ -538,7 +517,6 @@ class EMBurak:
         
     def run_EM(self, N_itr = None, N_g_itr = None):
         """
-
         Runs full expectation maximization algorithm
         N_itr - number of iterations of EM
         N_g_itr - number of gradient steps in M step
@@ -583,7 +561,6 @@ class EMBurak:
         """
         Creates a dictionary, self.data, that has all of the parameters of the model
         """
-        
         data = {}
         data['DT'] = self.DT
         data['DC'] = self.DC
