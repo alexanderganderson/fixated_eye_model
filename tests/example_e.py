@@ -16,7 +16,7 @@ ig.normalize()
 
 S_gen = ig.img
 
-emb = EMBurak(S_gen, D, N_T = 30, LAMBDA = 0., DC = 0.01, L_N = L_N)
+emb = EMBurak(S_gen, D, N_T = 100, LAMBDA = 0., DC = 0.01, L_N = L_N)
 emb.gen_data()
 emb.run()
 
