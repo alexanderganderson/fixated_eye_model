@@ -23,7 +23,7 @@ from utils.BurakPoissonLP import PoissonLP
 
 class EMBurak:
     def __init__(self, S_gen, D, DT = 0.001, DC = 100., N_T = 50,
-                 L_N = 14, a = 1., LAMBDA = 1.):
+                 L_N = 14, a = 1., LAMBDA = 1., save_mode = False):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -39,16 +39,17 @@ class EMBurak:
         checks for consistency L_I ** 2 = N_pix
         """
         
-        self.debug = False # If True, show debug images
-        self.save_mode = True # If true, save results of each EM iteration
-
-        self.D = D
-        #N_L - number of latent factors
-        #N_pix - number of pixels in the image
+        self.save_mode = save_mode # If true, save results of each EM iteration
+        print 'The save mode is ' + str(save_mode)
+        self.D = D # Dictionary
         self.N_L, self.N_Pix = D.shape
+        # N_L - number of latent factors
+        # N_pix - number of pixels in the image
+
 
         self.S_gen = S_gen
-        self.L_I = S_gen.shape[0]
+        self.L_I = S_gen.shape[0] # Linear dimension of the image
+
         if not self.L_I ** 2 == self.N_Pix:
             raise ValueError('Mismatch between dictionary and image size')
 
@@ -57,19 +58,17 @@ class EMBurak:
         self.DC = DC  # Diffusion Constant
         self.L0 = 10.
         self.L1 = 100.
-        
+                
+        # Problem Dimensions
+        self.N_T = N_T # Number of time steps
+        self.L_N = L_N # Linear dimension of neuron receptive field grid
+        self.N_N = self.L_N ** 2 # Number of neurons
+#       self.N_L Number of latent sparse factors
+#       self.L_I Linear dimension of image
+
         # Image Prior Parameters
         self.GAMMA = 100. # Pixel out of bounds cost parameter
-
         self.LAMBDA = LAMBDA # the sparse prior is delta (S-DA) + LAMBDA * |A|
-        
-        # Problem Dimensions
-#        self.N_L = N_L # Number of latent sparse factors
-        self.N_T = N_T # Number of time steps
-#        self.L_I = L_I # Linear dimension of image
-        self.L_N = L_N # Linear dimension of neuron receptive field grid
-
-        self.N_B = 1 # Number of batches of data (must be 1)
 
         # EM Parameters
         # M - Parameters (ADADELTA)
@@ -81,11 +80,6 @@ class EMBurak:
         # E Parameters (Particle Filter)
         self.N_P = 25 # Number of particles for the EM
         
-        # Other Parameters
-        self.N_Pix = self.L_I ** 2 # Number of pixels in image
-        self.N_N = self.L_N ** 2 # Number of neurons
-        
-
         # Initialize pixel and LGN positions
         # Position of pixels
         self.XS = np.arange(- self.L_I / 2, self.L_I / 2)
@@ -104,31 +98,37 @@ class EMBurak:
         self.XE = self.XE * self.a
         self.YE = self.YE * self.a
         
+
+        # Variances of gaussians for each pixel
+        self.Var = 0.25 * np.ones((self.L_I,)).astype('float32') 
+        # Gain factor (to be set later)
+        self.G = 1. 
+
+        # X-Position of retina (batches, timesteps), batches used for inference only
+        self.XR = np.zeros((1, self.N_T)).astype('float32') 
+        # Y-Position of retina
+        self.YR = np.zeros((1, self.N_T)).astype('float32') 
+        # Spikes (1 or 0)
+        self.R = np.zeros((self.N_N, self.N_T)).astype('float32')  
+
+        # Sparse Coefficients
+        self.A = np.zeros((self.N_L,)).astype('float32')      
+
+
+        # Shapes of other variables used elsewhere
+
         # Pixel values for generating image (same shape as estimated image)
 #        self.S_gen = np.zeros((self.L_I, self.L_I)).astype('float32') 
         # Assumes that the first dimension is 'Y' 
         #    and the second dimension is 'X'
 
-        # Variances of gaussians for each pixel
-        self.Var = 0.25 * np.ones((self.L_I,)).astype('float32') 
-        # Gain factor set later
-        self.G = 1. 
-
-        # X-Position of retina
-        self.XR = np.zeros((self.N_B, self.N_T)).astype('float32') 
-        # Y-Position of retina
-        self.YR = np.zeros((self.N_B, self.N_T)).astype('float32') 
-        # Spikes (1 or 0)
-        self.R = np.zeros((self.N_N, self.N_T)).astype('float32')  
         
         # Weighting for batches and time points
-        self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32') 
+        #self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32') 
         
         # Dictionary going from latent factors to image
-#        self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  
+#       self.D = np.zeros((self.N_L, self.N_Pix)).astype('float32')  
 
-        # Sparse Coefficients
-        self.A = np.zeros((self.N_L,)).astype('float32')      
             
 
         self.init_theano_core()
@@ -187,16 +187,18 @@ class EMBurak:
 
         
         def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
-            # Take dot product of image with an array of gaussians
-            # t_S - theano image variable dimensions i2, i1
-            # t_Var - variances of receptive fields
-            # t_XS - X coordinate for image pixels for dimension i1
-            # t_YS - Y coordinate for image pixels for dimension i2
-            # t_XE - X coordinate for receptive fields j
-            # t_YE - Y coordinate for receptive fields j
-            # t_XR - X coordinate for retina in form batch, timestep, b,t
-            # t_YR - Y coordinate ''
-
+            """
+            Take dot product of image with an array of gaussians
+            t_S - theano image variable dimensions i2, i1
+            t_Var - variances of receptive fields
+            t_XS - X coordinate for image pixels for dimension i1
+            t_YS - Y coordinate for image pixels for dimension i2
+            t_XE - X coordinate for receptive fields j
+            t_YE - Y coordinate for receptive fields j
+            t_XR - X coordinate for retina in form batch, timestep, b,t
+            t_YR - Y coordinate ''
+            """
+            
             # Note in this computation, we do the indices in this form:
             #  b, i, j, t
             #  batch, pixel, neuron, timestep
@@ -229,7 +231,13 @@ class EMBurak:
             # Sum_i1 T(b, i1, j, t) * T(b, i2, j, t) = T(b, j, t)
             t_Ips = T.sum(t_IpsY * t_PixRFCouplingX, axis = 1)
             t_Ips.name = 'Ips'
-            return t_Ips
+            
+            # For the gradient, we also prepare d Ips / dS
+            # This is in the form b, i2, i1, j, t
+            t_PixRFCoupling = (t_PixRFCouplingX.dimshuffle(0, 'x', 1, 2, 3) * 
+                               t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3))
+
+            return t_Ips, t_PixRFCoupling
 
         self.inner_products = inner_products
       
@@ -251,7 +259,7 @@ class EMBurak:
         
         self.t_S_gen = T.matrix('S_gen') # Image dims are i2, i1
 
-        self.t_Ips_gen = inner_products(self.t_S_gen, self.t_Var,
+        self.t_Ips_gen, _ = inner_products(self.t_S_gen, self.t_Var,
                                         self.t_XS, self.t_YS,
                                         self.t_XE, self.t_YE,
                                         self.t_XR, self.t_YR)
@@ -303,7 +311,7 @@ class EMBurak:
         
         self.t_Wbt = T.matrix('Wbt')
 
-        self.t_Ips = inner_products(self.t_S, self.t_Var,
+        self.t_Ips, _ = inner_products(self.t_S, self.t_Var,
                                     self.t_XS, self.t_YS,
                                     self.t_XE, self.t_YE,
                                     self.t_XR, self.t_YR)
@@ -426,26 +434,12 @@ class EMBurak:
         Generate a retinal path. Note that the path has a bias towards the
             center so that the image does not go too far out of range
         """
-        for b in range(self.N_B):
-            self.c.reset()
-            for t in range(self.N_T):
-                x = self.c.get_center()
-                self.XR[b, t] = x[0]
-                self.YR[b, t] = x[1]
-                self.c.advance()
-
-
-    def plot_path(self):
-        """
-        Plots the path corresponding to the first batch
-        """
-        plt.subplot(1, 2, 1)
-        plt.plot(np.arange(self.N_T) * self.DT, self.XR[0])
-        plt.title('x coordinate')
-        plt.subplot(1, 2, 2)
-        plt.plot(np.arange(self.N_T) * self.DT, self.YR[0])
-        plt.title('y coordinate')
-        plt.show()
+        self.c.reset()
+        for t in range(self.N_T):
+            x = self.c.get_center()
+            self.XR[0, t] = x[0]
+            self.YR[0, t] = x[1]
+            self.c.advance()
 
 
     def gen_spikes(self):
@@ -638,34 +632,6 @@ class EMBurak:
         """
         fn = self.output_dir + '/data_' + time_string() + '.pkl'        
         pkl.dump(self.data, open(fn, 'wb'))
-
-
-    def plot_image_estimate(self):
-        """
-        Plot the estimated image against the actual image
-        """
-        vmin = -1.
-        vmax = 1.
-        plt.subplot(1, 3, 1)
-        plt.title('Estimate')
-        plt.imshow(self.image_est(),
-                   cmap = plt.cm.gray, 
-                   interpolation = 'nearest', 
-                   vmin = vmin, vmax = vmax)
-        plt.colorbar()
-        plt.subplot(1, 3, 2)
-        plt.title('Actual')
-        plt.imshow(self.S_gen, cmap = plt.cm.gray, 
-                   interpolation = 'nearest',
-                   vmin = vmin, vmax = vmax)
-        plt.colorbar()
-        plt.subplot(1, 3, 3)
-        plt.title('Error')
-        plt.imshow(np.abs(self.S_gen - self.image_est()),
-                   cmap = plt.cm.gray, interpolation = 'nearest')
-        plt.colorbar()
-        plt.show()
-
 
 
 #    def true_path_infer_image_costs(self, N_g_itr = 10):
