@@ -34,20 +34,21 @@ class EMBurak:
             -- Initializes the Particle Filter object
             -- Checks that the output directory exists
 
-        S_gen - image that generates the spikes - (L_I, L_I)
-        D - dictionary used to infer latent factors, shape = (N_L, N_pix)
-        checks for consistency L_I ** 2 = N_pix
+        S_gen - image that generates the spikes - (L_I, L_I), type = float32
+        D - dictionary used to infer latent factors, 
+               shape = (N_L, N_pix), type = float32
+        Checks for consistency L_I ** 2 = N_pix
         """
         
         self.save_mode = save_mode # If true, save results of each EM iteration
         print 'The save mode is ' + str(save_mode)
-        self.D = D # Dictionary
+        self.D = D.astype('float32') # Dictionary
         self.N_L, self.N_Pix = D.shape
         # N_L - number of latent factors
         # N_pix - number of pixels in the image
 
 
-        self.S_gen = S_gen
+        self.S_gen = S_gen.astype('float32')
         self.L_I = S_gen.shape[0] # Linear dimension of the image
 
         if not self.L_I ** 2 == self.N_Pix:
