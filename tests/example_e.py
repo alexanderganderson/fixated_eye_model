@@ -5,7 +5,8 @@
 from model import *
 from analyzer import *
 
-L_I = 10 # Linear dimension of the image
+L_I = 14 # Linear dimension of the image
+L_N = 18 # Linear dimension of the neuron array
 N_pix = L_I ** 2
 D = np.eye(N_pix).astype('float32')
 
@@ -15,7 +16,7 @@ ig.normalize()
 
 S_gen = ig.img
 
-emb = EMBurak(S_gen, D, N_T = 30, LAMBDA = 0., DC = 0.01)
+emb = EMBurak(S_gen, D, N_T = 30, LAMBDA = 0., DC = 0.01, L_N = L_N)
 emb.gen_data()
 emb.run()
 
