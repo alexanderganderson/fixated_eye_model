@@ -626,7 +626,7 @@ class EMBurak:
         (Only includes dict for EM data if that was run)
         """
         if not self.savemode:
-            raise RuntimeError('Need to enable savemode to save')S
+            raise RuntimeError('Need to enable savemode to save')
 
         fn = self.output_dir + '/data_' + time_string() + '.pkl'        
         pkl.dump(self.data, open(fn, 'wb'))
