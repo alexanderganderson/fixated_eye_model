@@ -1,4 +1,4 @@
-g# Python script containing a class that does expectation maximization
+# Python script containing a class that does expectation maximization
 #   to estimate an image from simulated LGN cell responses
 # See the end of the script for a sample usage
 
@@ -157,6 +157,7 @@ class EMBurak:
         self.gen_spikes()
         self.pf.Y = self.R.transpose() # Update reference to spikes for PF
         #TODO: EWW
+
         if (self.save_mode):
             self.build_param_and_data_dict()
 
@@ -448,7 +449,8 @@ class EMBurak:
         """
         self.pf.reset()
         self.c.reset()
-        pass
+        self.data = {}
+
 
     
     def reset_image_estimate(self):
@@ -466,6 +468,8 @@ class EMBurak:
         """
         if (t > self.N_T): 
             raise IndexError('Maximum simulated timesteps exceeded in E step')
+        if self.pf.t >= t:
+            raise IndexError('Particle filter already run past given time point')
         while (self.pf.t < t):
             self.pf.advance()
         self.pf.calculate_means_sdevs()
@@ -527,37 +531,42 @@ class EMBurak:
         Saves summary of run info in self.data 
         Note running twice will overwrite this run info
         """
-        if N_itr != None:
+        if N_itr == None:
+            N_itr = self.N_itr
+        else:
             self.N_itr = N_itr
-        if N_g_itr != None:
+
+        if N_g_itr == None:
+            N_g_itr = self.N_g_itr
+        else:
             self.N_g_itr = N_g_itr
         
         self.reset_image_estimate()
             
         EM_data = {}
     
-        print 'Running full EM'
+        print '\n' + 'Running full EM'
         
-        for u in range(self.N_itr):
+        for u in range(N_itr):
             t = self.N_T * (u + 1) / self.N_itr
-            print ('Iteration number ' + str(u) + 
+            print ('\n' + 'Iteration number ' + str(u) + 
                    ' Running up time = ' + str(t))
             
             # Run E step
             self.run_E(t)
             
             # Run M step
-            self.run_M(t, N_g_itr = self.N_g_itr)
+            self.run_M(t, N_g_itr = N_g_itr)
             
             iteration_data = {}
             iteration_data['time_steps'] = t
             iteration_data['path_means'] = self.pf.means
             iteration_data['path_sdevs'] = self.pf.sdevs
             iteration_data['image_est'] = self.image_est()
-            
             iteration_data['coeff_est'] = self.t_A.get_value()
             
             EM_data[u] = iteration_data
+
         if (self.save_mode):
             self.data['EM_data'] = EM_data
 
@@ -579,7 +588,10 @@ class EMBurak:
         """
         Creates a dictionary, self.data, that has all of the parameters of the model
         """
+        # Note it is important to create a new dictionary here so that
+        # we reset the data dict after generating new data
         data = {}
+
         data['DT'] = self.DT
         data['DC'] = self.DC
         data['L0'] = self.L0
@@ -624,13 +636,14 @@ class EMBurak:
         Saves information relevant to the EM run
         data.pkl - saves dictionary with all data relevant to EM run
         (Only includes dict for EM data if that was run)
+        Returns the filename
         """
-        if not self.savemode:
+        if not self.save_mode:
             raise RuntimeError('Need to enable savemode to save')
 
-        fn = self.output_dir + '/data_' + time_string() + '.pkl'        
-        pkl.dump(self.data, open(fn, 'wb'))
-
+        self.fn = self.output_dir + '/data_' + time_string() + '.pkl'        
+        pkl.dump(self.data, open(self.fn, 'wb'))
+        return self.fn
 
 #    def true_path_infer_image_costs(self, N_g_itr = 10):
 #        """
