@@ -1,4 +1,4 @@
-# Python script containing a class that does expectation maximization
+g# Python script containing a class that does expectation maximization
 #   to estimate an image from simulated LGN cell responses
 # See the end of the script for a sample usage
 
@@ -157,7 +157,8 @@ class EMBurak:
         self.gen_spikes()
         self.pf.Y = self.R.transpose() # Update reference to spikes for PF
         #TODO: EWW
-        self.build_param_and_data_dict()
+        if (self.save_mode):
+            self.build_param_and_data_dict()
 
              
     def init_theano_core(self):
@@ -557,8 +558,8 @@ class EMBurak:
             iteration_data['coeff_est'] = self.t_A.get_value()
             
             EM_data[u] = iteration_data
-            
-        self.data['EM_data'] = EM_data
+        if (self.save_mode):
+            self.data['EM_data'] = EM_data
 
 
     def init_output_dir(self):
@@ -624,6 +625,9 @@ class EMBurak:
         data.pkl - saves dictionary with all data relevant to EM run
         (Only includes dict for EM data if that was run)
         """
+        if not self.savemode:
+            raise RuntimeError('Need to enable savemode to save')S
+
         fn = self.output_dir + '/data_' + time_string() + '.pkl'        
         pkl.dump(self.data, open(fn, 'wb'))
 
