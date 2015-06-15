@@ -38,9 +38,13 @@ class EMBurak:
         D - dictionary used to infer latent factors, 
                shape = (N_L, N_pix), type = float32
         Checks for consistency L_I ** 2 = N_pix
+
+        Note that changing certain parameters without reinitializing the class
+        may have unexpected effects (because the changes won't necessarily
+        propagate to subclasses. 
         """
         
-        self.save_mode = save_mode # If true, save results of each EM iteration
+        self.save_mode = save_mode # If true, save results after EM completes
         print 'The save mode is ' + str(save_mode)
         self.D = D.astype('float32') # Dictionary
         self.N_L, self.N_Pix = D.shape
@@ -57,6 +61,7 @@ class EMBurak:
         # Simulation Parameters
         self.DT = DT # Simulation timestep
         self.DC = DC  # Diffusion Constant
+        print 'The diffusion constant is ' + str(self.DC)
         self.L0 = 10.
         self.L1 = 100.
                 
@@ -99,6 +104,8 @@ class EMBurak:
         self.XE = self.XE * self.a
         self.YE = self.YE * self.a
         
+        # Identity of LGN cells (ON = 0, OFF = 1)
+        self.IE = np.random.randint(2, size = (self.N_N,)).astype('float32')
 
         # Variances of gaussians for each pixel
         self.Var = 0.25 * np.ones((self.L_I,)).astype('float32') 
@@ -135,6 +142,7 @@ class EMBurak:
         self.init_theano_core()
         self.set_gain_factor()
         self.init_path_generator()
+        self.init_particle_filter()
         
         if (self.save_mode):
             self.init_output_dir()
@@ -147,20 +155,11 @@ class EMBurak:
         """
         self.gen_path()
         self.gen_spikes()
+        self.pf.Y = self.R.transpose() # Update reference to spikes for PF
+        #TODO: EWW
         self.build_param_and_data_dict()
-        self.init_particle_filter()
 
              
-    def run(self):
-        """
-        Runs an iteration of EM
-        Then saves relevant summary information about the run
-        """
-        self.run_EM()
-        if (self.save_mode):
-            self.save()
-
-
     def init_theano_core(self):
         """
         Initializes all theano variables and functions
@@ -170,6 +169,7 @@ class EMBurak:
         self.t_YS = theano.shared(self.YS, 'YS')
         self.t_XE = theano.shared(self.XE, 'XE')
         self.t_YE = theano.shared(self.YE, 'YE')
+        self.t_IE = theano.shared(self.IE, 'IE')
         self.t_Var = theano.shared(self.Var, 'Var')
 
         self.t_XR = T.matrix('XR')
@@ -183,10 +183,11 @@ class EMBurak:
         self.t_DC = T.scalar('DC')
         self.t_G = T.scalar('G')
 
+
         def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
             """
             Take dot product of image with an array of gaussians
-            t_S - theano image variable dimensions i2, i1
+            t_S - image variable shape - (i2, i1)
             t_Var - variances of receptive fields
             t_XS - X coordinate for image pixels for dimension i1
             t_YS - Y coordinate for image pixels for dimension i2
@@ -238,14 +239,18 @@ class EMBurak:
 
         self.inner_products = inner_products
       
-        def firing_prob(t_Ips, t_G, t_L0, t_L1, t_DT):
+        def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
             # Firing probabilities indexed by b, j, t
             # t_Ips - Image-RF inner products indexed as b, j, t
             # t_G - gain constant
+            # t_IE - identity of retinal ganglion cells
             # t_L0, t_L1 - min, max firing rate
             # t_DT - time step size
 
-            t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_G * t_Ips)
+            t_IEr = t_IE.dimshuffle('x', 0, 'x')
+            t_Gen = t_IEr + (1 - 2 * t_IEr) * t_G * t_Ips # Generator signal
+
+            t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
 
             t_FP = T.switch(t_FP_0 > 0.9, 0.9, t_FP_0)
             return t_FP
@@ -259,7 +264,7 @@ class EMBurak:
                                         self.t_XS, self.t_YS,
                                         self.t_XE, self.t_YE,
                                         self.t_XR, self.t_YR)
-        self.t_FP_gen = firing_prob(self.t_Ips_gen, self.t_G, 
+        self.t_FP_gen = firing_prob(self.t_Ips_gen, self.t_G, self.t_IE,
                                     self.t_L0, self.t_L1, self.t_DT)
 
         # Computes image-RF inner products and the resulting firing probabilities
@@ -307,7 +312,7 @@ class EMBurak:
                                        self.t_XE, self.t_YE,
                                        self.t_XR, self.t_YR)
 
-        self.t_FP = firing_prob(self.t_Ips, self.t_G, 
+        self.t_FP = firing_prob(self.t_Ips, self.t_G, self.t_IE,
                                 self.t_L0, self.t_L1, self.t_DT)
 
         # Compute Energy Functions (negative log-likelihood) to minimize
@@ -388,18 +393,6 @@ class EMBurak:
                        self.DT, self.G, self.spike_energy)
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp, 
                                     self.R.transpose(), self.N_P)
-
-    def init_output_dir(self):
-        """
-        Create an output directory 
-        """
-        if not os.path.exists('output'):
-            os.mkdir('output')
-            
-        self.output_dir = 'output/' + time_string()
-        
-        if not os.path.exists(self.output_dir):
-            os.mkdir(self.output_dir)
             
 
     def init_path_generator(self):
@@ -426,7 +419,7 @@ class EMBurak:
         """
         Generate LGN responses given the path and the image
         """
-        self.R = self.spikes(self.S_gen, self.XR, self.YR, self.L0, 
+        self.R[:, :] = self.spikes(self.S_gen, self.XR, self.YR, self.L0, 
                              self.L1, self.DT, self.G)[0]
         print 'Mean firing rate ' + str(self.R.mean() / self.DT)
 
@@ -448,6 +441,15 @@ class EMBurak:
         print 'Costs of underlying data ' + str((E/self.N_T, E_rec/self.N_T))
 
 
+    def reset(self):
+        """
+        Resets the class between EM runs
+        """
+        self.pf.reset()
+        self.c.reset()
+        pass
+
+    
     def reset_image_estimate(self):
         """
         Resets the value of the image as stored on the GPU
@@ -488,7 +490,7 @@ class EMBurak:
         result is saved in t_A.get_value()
         """
         self.reset_M_aux()
-        print 'Spike Energy / t | Bound. Energy / t | SNR' 
+        print 'Total Energy / t | Bound. Energy / t | Spike Energy / t | + Sparse E / t |  SNR' 
         for v in range(N_g_itr):
             args = (self.pf.XS[0:t, :, 0].transpose(),
                     self.pf.XS[0:t, :, 1].transpose(),
@@ -538,7 +540,7 @@ class EMBurak:
         for u in range(self.N_itr):
             t = self.N_T * (u + 1) / self.N_itr
             print ('Iteration number ' + str(u) + 
-                   ' Running up time time = ' + str(t))
+                   ' Running up time = ' + str(t))
             
             # Run E step
             self.run_E(t)
@@ -557,6 +559,20 @@ class EMBurak:
             EM_data[u] = iteration_data
             
         self.data['EM_data'] = EM_data
+
+
+    def init_output_dir(self):
+        """
+        Create an output directory 
+        """
+        if not os.path.exists('output'):
+            os.mkdir('output')
+            
+        self.output_dir = 'output/' + time_string()
+        
+        if not os.path.exists(self.output_dir):
+            os.mkdir(self.output_dir)
+
 
     def build_param_and_data_dict(self):
         """

@@ -14,14 +14,14 @@ _, N_pix = D.shape
 L_I = int(np.sqrt(N_pix)) # Linear dimension of image
 
 ig = ImageGenerator(L_I)
-ig.make_digit()
+ig.make_digit(mode = 'random')
 ig.normalize()
 
 S_gen = ig.img
 
 emb = EMBurak(S_gen, D, N_T = 30)
 emb.gen_data()
-emb.run()
+emb.run_EM()
 
 da = DataAnalyzer(emb.data)
 

@@ -18,7 +18,7 @@ S_gen = ig.img
 
 emb = EMBurak(S_gen, D, N_T = 100, LAMBDA = 0., DC = 0.01, L_N = L_N)
 emb.gen_data()
-emb.run()
+emb.run_EM()
 
 da = DataAnalyzer(emb.data)
 
