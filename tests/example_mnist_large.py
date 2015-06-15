@@ -3,8 +3,8 @@ from analyzer import *
 
 # Tests the algorithm using a variety of mnist digits and a sparse coding dictionary
 
-N_diff_images = 1 # Run for <> different images
-N_replicates = 2 # Run each image <> times
+N_diff_images = 10 # Run for <> different images
+N_replicates = 10 # Run each image <> times
 
 try:
     data = loadmat('data/mnist_dictionary.mat')
@@ -22,10 +22,10 @@ for _ in range(N_diff_images):
     ig.make_digit(mode = 'random')
     ig.normalize()
     S_gen = ig.img
-    emb = EMBurak(S_gen, D, N_T = 20, save_mode = True)
+    emb = EMBurak(S_gen, D, N_T = 100, save_mode = True)
     for _ in range(N_replicates):
         emb.reset()
         emb.gen_data()
-        emb.run_EM(N_itr = 5)
+        emb.run_EM(N_itr = 20)
         filename = emb.save()
         

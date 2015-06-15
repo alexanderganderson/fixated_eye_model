@@ -450,7 +450,8 @@ class EMBurak:
         self.pf.reset()
         self.c.reset()
         self.data = {}
-
+        self.reset_image_estimate()
+        self.reset_M_aux()
 
     
     def reset_image_estimate(self):
@@ -507,7 +508,7 @@ class EMBurak:
             out = self.img_grad(*args)
             self.img_SNR = SNR(self.S_gen, self.image_est())
         
-        print self.print_costs(out, t) + str(self.img_SNR)
+            print self.print_costs(out, t) + str(self.img_SNR)
 
 
     def print_costs(self, out, t):
