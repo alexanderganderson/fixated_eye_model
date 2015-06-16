@@ -23,7 +23,8 @@ from utils.BurakPoissonLP import PoissonLP
 
 class EMBurak:
     def __init__(self, S_gen, D, DT = 0.001, DC = 100., N_T = 50,
-                 L_N = 14, a = 1., LAMBDA = 1., save_mode = False):
+                 L_N = 14, a = 1., LAMBDA = 1., save_mode = False, 
+                 N_itr = 10):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -81,7 +82,7 @@ class EMBurak:
         self.Rho = 0.4
         self.Eps = 0.001
         self.N_g_itr = 10
-        self.N_itr = 10
+        self.N_itr = N_itr
 
         # E Parameters (Particle Filter)
         self.N_P = 25 # Number of particles for the EM
