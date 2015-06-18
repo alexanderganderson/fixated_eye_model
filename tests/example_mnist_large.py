@@ -5,6 +5,7 @@ from analyzer import *
 
 N_diff_images = 10 # Run for <> different images
 N_replicates = 10 # Run each image <> times
+N_itr = 20
 
 try:
     data = loadmat('data/mnist_dictionary.mat')
@@ -23,10 +24,10 @@ for _ in range(N_diff_images):
     ig.normalize()
     S_gen = ig.img
     S_gen_name = ig.img_name
-    emb = EMBurak(S_gen, D, N_T = 100, save_mode = True, S_gen_name = S_gen_name)
+    emb = EMBurak(S_gen, D, N_T = 100, save_mode = True, S_gen_name = S_gen_name, N_itr = 20)
     for _ in range(N_replicates):
         emb.reset()
         emb.gen_data()
-        emb.run_EM(N_itr = 20)
+        emb.run_EM()
         filename = emb.save()
         
