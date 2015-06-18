@@ -14,7 +14,8 @@ _, N_pix = D.shape
 L_I = int(np.sqrt(N_pix)) # Linear dimension of image
 
 ig = ImageGenerator(L_I)
-ig.make_digit(mode = 'random')
+#ig.make_digit(mode = 'random')
+ig.make_digit()
 ig.normalize()
 
 S_gen = ig.img

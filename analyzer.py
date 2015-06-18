@@ -161,8 +161,8 @@ class DataAnalyzer:
         q - index of EM iteration to plot
         """
         
-        if (q >= self.N_itr):
-            raise ValueError('Iteration index, q, is too large')
+#        if (q >= self.N_itr):
+#            raise ValueError('Iteration index, q, is too large')
         
         m1 = np.min(self.S_gen)
         m2 = np.max(self.S_gen)

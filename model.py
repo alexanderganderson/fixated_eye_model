@@ -162,7 +162,8 @@ class EMBurak:
         if (self.save_mode):
             self.build_param_and_data_dict()
 
-             
+
+         
     def init_theano_core(self):
         """
         Initializes all theano variables and functions
@@ -294,9 +295,13 @@ class EMBurak:
             t_FP - Firing probabilities in form b, j, t
             Returns -log p(R|X,S) with indices in the form b, j, t
             """
-            t_E_R_f = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP) 
-                     + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
+#            t_E_R_f = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP) 
+#                     + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
+#         Try using poisson loss instead of bernoulli loss
+            t_E_R_f = -t_R.dimshuffle('x', 0, 1) * T.log(t_FP) + t_FP
+
             t_E_R_f.name = 'E_R_f'
+ 
             return t_E_R_f
 
         self.spiking_cost = spiking_cost
@@ -368,6 +373,12 @@ class EMBurak:
         self.img_grad = theano.function(inputs = inputs,
                                         outputs = energy_outputs,
                                         updates = self.grad_updates)
+
+
+
+        # Prepare the hand calculation of the gradient (prep for hessian)
+#        t_Dp = 
+
 
     def set_gain_factor(self):
         """
@@ -525,31 +536,21 @@ class EMBurak:
         return strg
 
         
-    def run_EM(self, N_itr = None, N_g_itr = None):
+    def run_EM(self):
         """
         Runs full expectation maximization algorithm
-        N_itr - number of iterations of EM
-        N_g_itr - number of gradient steps in M step
+        self.N_itr - number of iterations of EM
+        self.N_g_itr - number of gradient steps in M step
         Saves summary of run info in self.data 
         Note running twice will overwrite this run info
         """
-        if N_itr == None:
-            N_itr = self.N_itr
-        else:
-            self.N_itr = N_itr
-
-        if N_g_itr == None:
-            N_g_itr = self.N_g_itr
-        else:
-            self.N_g_itr = N_g_itr
-        
         self.reset_image_estimate()
-            
+
         EM_data = {}
     
         print '\n' + 'Running full EM'
         
-        for u in range(N_itr):
+        for u in range(self.N_itr):
             t = self.N_T * (u + 1) / self.N_itr
             print ('\n' + 'Iteration number ' + str(u) + 
                    ' Running up time = ' + str(t))
@@ -558,7 +559,7 @@ class EMBurak:
             self.run_E(t)
             
             # Run M step
-            self.run_M(t, N_g_itr = N_g_itr)
+            self.run_M(t, N_g_itr = self.N_g_itr)
             
             iteration_data = {}
             iteration_data['time_steps'] = t
