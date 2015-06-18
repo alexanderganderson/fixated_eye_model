@@ -22,7 +22,8 @@ for _ in range(N_diff_images):
     ig.make_digit(mode = 'random')
     ig.normalize()
     S_gen = ig.img
-    emb = EMBurak(S_gen, D, N_T = 100, save_mode = True)
+    S_gen_name = ig.img_name
+    emb = EMBurak(S_gen, D, N_T = 100, save_mode = True, S_gen_name = S_gen_name)
     for _ in range(N_replicates):
         emb.reset()
         emb.gen_data()

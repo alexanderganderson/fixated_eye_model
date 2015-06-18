@@ -24,7 +24,7 @@ from utils.BurakPoissonLP import PoissonLP
 class EMBurak:
     def __init__(self, S_gen, D, DT = 0.001, DC = 100., N_T = 50,
                  L_N = 14, a = 1., LAMBDA = 1., save_mode = False, 
-                 N_itr = 10):
+                 N_itr = 10, S_gen_name = ' '):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -38,6 +38,7 @@ class EMBurak:
         S_gen - image that generates the spikes - (L_I, L_I), type = float32
         D - dictionary used to infer latent factors, 
                shape = (N_L, N_pix), type = float32
+        S_gen_name - name of image (eg. label)
         Checks for consistency L_I ** 2 = N_pix
 
         Note that changing certain parameters without reinitializing the class
@@ -54,6 +55,7 @@ class EMBurak:
 
 
         self.S_gen = S_gen.astype('float32')
+        self.S_gen_name = S_gen_name
         self.L_I = S_gen.shape[0] # Linear dimension of the image
 
         if not self.L_I ** 2 == self.N_Pix:
@@ -630,7 +632,8 @@ class EMBurak:
         data['YR'] = self.YR
 
         data['S_gen'] = self.S_gen
-        
+        data['S_gen_name'] = self.S_gen_name
+
         self.data = data
 
         

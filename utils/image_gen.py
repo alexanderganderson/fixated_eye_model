@@ -17,7 +17,8 @@ class ImageGenerator:
         
     def reset_img(self):
         self.img = np.zeros((self.L_I, self.L_I), dtype = 'float32')
-        
+        self.img_name = ''
+
     def dot(self):
         self.img[self.L_I / 2, self.L_I / 2] = 1.
     
@@ -34,6 +35,8 @@ class ImageGenerator:
         try:
             data = loadmat('data/mnist_small.mat')
             IMAGES = data['IMAGES']
+            LABELS = data['LABELS'][0]
+
             K, self.L_I, _ = IMAGES.shape
             
             if mode == 'fixed':
@@ -45,6 +48,8 @@ class ImageGenerator:
 
             self.reset_img()
             self.img[:, :] = IMAGES[k]
+            self.img_name = str(LABELS[k])
+
         except IOError, e:
             print e
             print 'MNIST file not found, making big E instead'
@@ -76,7 +81,7 @@ class ImageGenerator:
         
         self.img = (np.exp( -((X - x0) ** 2 + (Y - y0) ** 2) / sig ** 2 ) *
                     np.sin(phi + k1 * X + k2 * Y))
-        
+        self.img_name = 'gabor'
         self.normalize()    
     
     def make_E(self):
@@ -84,22 +89,25 @@ class ImageGenerator:
         self.img[self.L_I / 2, 2:-1] = 1
         self.img[-2, 2:-1] = 1
         self.img[1:-1, 2] = 1
-        
+        self.img_name = 'E'
+
     def make_big_E(self):
         self.img[1:3, 2:-2] = 1
         self.img[self.L_I / 2 - 1: self.L_I/2 + 1, 2:-2] = 1
         self.img[-4:-2, 2:-2] = 1
         self.img[1:-2, 2:4] = 1
-        
+        self.img_name = 'bigE'
         
     def random(self):
         self.img[:, :] = np.random.random(
             (self.L_I, self.L_I)).astype('float32')
-            
+        self.img_name = 'white_noise'
+
     def make_T(self):
         self.img[1, 1:-1] = 1
         self.img[2:-1, self.L_I / 2] = 1
-        
+        self.img_name = 'T'
+
     def smooth(self, a = 3, sig = 0.1):
         X = np.arange(-a, a+1).astype('float32')
         Y = X

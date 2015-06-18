@@ -19,8 +19,9 @@ ig.make_digit()
 ig.normalize()
 
 S_gen = ig.img
+S_gen_name = ig.img_name
 
-emb = EMBurak(S_gen, D, N_T = 30, save_mode = True)
+emb = EMBurak(S_gen, D, N_T = 30, save_mode = True, S_gen_name = S_gen_name)
 emb.gen_data()
 emb.run_EM()
 

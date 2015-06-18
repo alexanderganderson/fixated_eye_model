@@ -119,6 +119,12 @@ class DataAnalyzer:
         return [self.SNR_idx(q) for q in range(self.N_itr)]
 
 
+    def time_list(self):
+        """
+        Returns a list of the times for each EM iteration in ms
+        """
+        return self.N_T * (np.arange(self.N_itr) + 1) / self.N_itr * 1000 * self.DT
+
     def plot_path_estimate(self, q, d):
         """
         Plot the actual and estimated path generated from EM on iteration q
