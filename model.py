@@ -7,7 +7,7 @@ import theano
 import theano.tensor as T
 import os
 from scipy.signal import convolve2d
-from utils.path_generator import Center
+from utils.path_generator import DiffusionPathGenerator
 import utils.particle_filter_new as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator
@@ -22,7 +22,7 @@ from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
-    def __init__(self, S_gen, D, XYR_gen = None, DT = 0.001, DC = 100., 
+    def __init__(self, S_gen, D, DT = 0.001, DC = 100., 
                  N_T = 50,
                  L_N = 14, a = 1., LAMBDA = 1., save_mode = False, 
                  N_itr = 10, S_gen_name = ' '):
@@ -146,7 +146,7 @@ class EMBurak:
 
         self.init_theano_core()
         self.set_gain_factor()
-        self.init_path_generator()
+        self.pg = DiffusionPathGenerator(self.N_T, self.L_I, self.DC, self.DT)
         self.init_particle_filter()
         
         if (self.save_mode):
@@ -158,7 +158,11 @@ class EMBurak:
         Generates a path and spikes
         Builds a dictionary saving these data
         """
-        self.gen_path()
+        # Generate Path
+        path = self.pg.gen_path()
+        self.XR[0, :] = path[0]
+        self.YR[0, :] = path[1]
+
         self.gen_spikes()
         self.pf.Y = self.R.transpose() # Update reference to spikes for PF
         #TODO: EWW
@@ -412,26 +416,6 @@ class EMBurak:
         self.pf = PF.ParticleFilter(ipd, tpd, ip, tp, lp, 
                                     self.R.transpose(), self.N_P)
             
-
-    def init_path_generator(self):
-        """
-        Initialize the path generator
-        """
-        self.c = Center(self.L_I, self.DC, self.DT)
-
-        
-    def gen_path(self):
-        """
-        Generate a retinal path. Note that the path has a bias towards the
-            center so that the image does not go too far out of range
-        """
-        self.c.reset()
-        for t in range(self.N_T):
-            x = self.c.get_center()
-            self.XR[0, t] = x[0]
-            self.YR[0, t] = x[1]
-            self.c.advance()
-
 
     def gen_spikes(self):
         """
