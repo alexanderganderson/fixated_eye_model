@@ -22,7 +22,8 @@ from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
-    def __init__(self, S_gen, D, DT = 0.001, DC = 100., N_T = 50,
+    def __init__(self, S_gen, D, XYR_gen = None, DT = 0.001, DC = 100., 
+                 N_T = 50,
                  L_N = 14, a = 1., LAMBDA = 1., save_mode = False, 
                  N_itr = 10, S_gen_name = ' '):
         """
@@ -119,6 +120,7 @@ class EMBurak:
         self.XR = np.zeros((1, self.N_T)).astype('float32') 
         # Y-Position of retina
         self.YR = np.zeros((1, self.N_T)).astype('float32') 
+
         # Spikes (1 or 0)
         self.R = np.zeros((self.N_N, self.N_T)).astype('float32')  
 
@@ -630,6 +632,7 @@ class EMBurak:
 
         data['XR'] = self.XR
         data['YR'] = self.YR
+        data['IE'] = self.IE
 
         data['S_gen'] = self.S_gen
         data['S_gen_name'] = self.S_gen_name

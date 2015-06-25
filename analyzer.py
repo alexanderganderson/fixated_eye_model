@@ -218,18 +218,27 @@ class DataAnalyzer:
             plt.clf()
             self.plot_EM_estimate(q)
             plt.savefig('img%d.png' % (100 + q))
-            
+
+    def plot_RFs(self):
+        """
+        Creates a plot of the receptive fields of the neurons
+        """
+        self.XE = self.data['XE']
+        self.YE = self.data['YE']
+#        self.IE = self.data['IE']
+        self.Var = self.data['Var']
+        std = np.sqrt(np.mean(self.Var))
+        fig = plt.gcf()
+        ax = plt.gca()
+        ax.set_xlim((np.min(self.XE), np.max(self.XE)))
+        ax.set_ylim((np.min(self.YE), np.max(self.YE)))
+        for xe, ye in zip(self.XE, self.YE):
+            circ = plt.Circle((xe, ye), std, color = 'b', alpha = 0.4)
+            fig.gca().add_artist(circ)
 
 if __name__ == '__main__':
-    dir = sys.argv[1]
-    filenames = os.listdir(dir)
+    fn = sys.argv[1]
+    da = DataAnalyzer.fromfilename(fn)
 
-    for filename in filenames:
-
-        da = DataAnalyzer.fromfilename(dir + filename)
-        SNRs = da.SNR_list()
-        print SNRs
-        da.plot_EM_estimate(8)
-        plt.show()
 #plt.plot(SNRs)
 #plt.show()
