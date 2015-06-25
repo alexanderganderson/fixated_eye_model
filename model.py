@@ -7,7 +7,7 @@ import theano
 import theano.tensor as T
 import os
 from scipy.signal import convolve2d
-from utils.bounded_diffusion import Center
+from utils.path_generator import Center
 import utils.particle_filter_new as PF
 from utils.theano_gradient_routines import ada_delta
 from utils.image_gen import ImageGenerator

@@ -70,7 +70,7 @@ class PathGenerator():
         """
         return np.zeros((2, self.N_T))
 
-    @abc.abstractmethod:
+    @abc.abstractmethod
     def path_mode(self):
         """
         Returns a string describing the path
