@@ -4,25 +4,25 @@ import cPickle as pkl
 import abc
 
 class Center:
-    def __init__(self, Lx, D, dt):
+    def __init__(self, Lx, DC, DT):
         """
         Class that Implements a diffusing center in a box of size Lx
         
         Lx = linear dimension of square to diffuse in
-        D = diffusion constant
-        dt = timestep size
+        DC = diffusion constant
+        DT = timestep size
         x = coordinates of the current location of the random walk, 
             initialized as [0, 0]
         Initializes Center Object
         """
         self.Lx = Lx
-        self.D = D
+        self.DC = DC
         self.m0 = np.array([0, 0], dtype = 'float64') # current position
-        self.dt = dt
+        self.DT = DT
         # The diffusion is biased towards the center by taking a product of gaussians
         #   A product of gaussians is also a gaussian with mean, sdev given as (mn, sn)
         self.m1 = np.array([0, 0], dtype = 'float64') # center of image
-        self.s0 = np.sqrt(self.D * self.dt) # Standard deviation for diffusion
+        self.s0 = np.sqrt(self.DC * self.DT) # Standard deviation for diffusion
         self.s1 = self.Lx / 4  # Standard Deviation for centering gaussian
         self.sn = 1 / np.sqrt(1 / self.s0 ** 2 + 1 / self.s1 ** 2)
 
@@ -78,12 +78,16 @@ class PathGenerator():
         return ' '
 
 class DiffusionPathGenerator(PathGenerator):
-    def __init__(self, N_T, Lx, D, dt):
+    def __init__(self, N_T, Lx, DC, DT):
         """
         Creates a path generator that does bounded diffusion
+        N_T - number of timesteps to generate path
+        Lx - window that the diffusion is restricted to
+        DC - diffusion constant
+        DT - timestep
         """
         PathGenerator.__init__(self, N_T)
-        self.c = Center(Lx, D, dt)
+        self.c = Center(Lx, DC, DT)
         
     def gen_path(self):
         self.c.reset()
@@ -97,7 +101,7 @@ class DiffusionPathGenerator(PathGenerator):
         return 'Diffusion'
 
 class ExperimentalPathGenerator(PathGenerator):
-    def __init__(self, N_T, filename, dt):
+    def __init__(self, N_T, filename, DT):
         """
         Creates a path generator that uses real experimental data
         filename - filename for pkl file that contains an array of paths
@@ -105,12 +109,12 @@ class ExperimentalPathGenerator(PathGenerator):
         """
         PathGenerator.__init__(self, N_T)
         self.data = pkl.load(filename)
-        self.dt = data['dt']
+        self.DT = data['DT']
         self.paths = data['paths']
         self.N_runs, _, self.N_T_data = self.paths.shape
-        if not self.dt == dt:
+
+        if not self.DT == DT:
             raise ValueError('Data timestep doesnt match simulation timestep')
-        
         if self.N_T > self.N_T_data:
             raise ValueError('Simulation has more timesteps than data')
 

@@ -617,7 +617,8 @@ class EMBurak:
         data['XR'] = self.XR
         data['YR'] = self.YR
         data['IE'] = self.IE
-
+        data['path_mode'] = self.pg.path_mode()
+        
         data['S_gen'] = self.S_gen
         data['S_gen_name'] = self.S_gen_name
 
