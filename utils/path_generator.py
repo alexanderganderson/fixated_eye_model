@@ -105,7 +105,8 @@ class ExperimentalPathGenerator(PathGenerator):
         """
         Creates a path generator that uses real experimental data
         filename - filename for pkl file that contains an array of paths
-              data['paths'] = (N_runs, 2, number of timesteps)
+              data['paths'] = (N_runs, number of timesteps, 2)
+              2 - number of dimensions of path eg. x,y
         """
         PathGenerator.__init__(self, N_T)
         self.data = pkl.load(filename)
@@ -124,7 +125,7 @@ class ExperimentalPathGenerator(PathGenerator):
         """
         q = np.random.randint(self.N_runs)
         st = np.random.randint(self.N_T_data - self.N_T)
-        return self.paths[q, :, st:(st + self.N_T)]
+        return self.paths[q, st:(st + self.N_T), :].transpose()
 
     def path_mode(self):
         return 'Experimental_data'
