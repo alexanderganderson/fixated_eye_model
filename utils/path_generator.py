@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import cPickle as pkl
+from scipy.io import loadmat
 import abc
 
 class Center:
@@ -109,15 +109,15 @@ class ExperimentalPathGenerator(PathGenerator):
               2 - number of dimensions of path eg. x,y
         """
         PathGenerator.__init__(self, N_T)
-        self.data = pkl.load(filename)
-        self.DT = data['DT']
-        self.paths = data['paths']
-        self.N_runs, _, self.N_T_data = self.paths.shape
+        self.data = loadmat(filename)
+        self.DT = self.data['DT'][0, 0]
+        self.paths = self.data['paths']
+        self.N_runs, self.N_T_data, _ = self.paths.shape
 
         if not self.DT == DT:
             raise ValueError('Data timestep doesnt match simulation timestep')
         if self.N_T > self.N_T_data:
-            raise ValueError('Simulation has more timesteps than data')
+            pass #raise ValueError('Simulation has more timesteps than data')
 
     def gen_path(self):
         """
@@ -125,7 +125,17 @@ class ExperimentalPathGenerator(PathGenerator):
         """
         q = np.random.randint(self.N_runs)
         st = np.random.randint(self.N_T_data - self.N_T)
-        return self.paths[q, st:(st + self.N_T), :].transpose()
-
+        pat = self.paths[q, st:(st + self.N_T), :].transpose()
+        pat[0] = pat[0] - pat[0][0]
+        pat[1] = pat[1] - pat[1][0]
+        return pat
+        
     def path_mode(self):
         return 'Experimental_data'
+
+
+if __name__ == '__main__':
+    fn = 'data/resampled_paths.mat'
+    pg = ExperimentalPathGenerator(100, fn, 0.001)
+    path = pg.gen_path()
+    print path
