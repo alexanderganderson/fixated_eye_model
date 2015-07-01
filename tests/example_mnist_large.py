@@ -29,5 +29,5 @@ for _ in range(N_diff_images):
         emb.reset()
         emb.gen_data()
         emb.run_EM()
-        filename = emb.save()
+        filename = emb.save
         

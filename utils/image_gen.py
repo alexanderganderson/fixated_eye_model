@@ -33,7 +33,7 @@ class ImageGenerator:
             raise ValueError('To create a digit, L_I = 14')
 
         try:
-            data = loadmat('data/mnist_small.mat')
+            data = loadmat('main/data/mnist_small.mat')
             IMAGES = data['IMAGES']
             LABELS = data['LABELS'][0]
 
@@ -52,8 +52,7 @@ class ImageGenerator:
 
         except IOError, e:
             print e
-            print 'MNIST file not found, making big E instead'
-            self.make_big_E()
+            raise IOError(e)
     
     def make_gabor(self, x0 = 0., y0 = 0., k = None,
                    eta = np.pi / 4., phi = 0., sig = None):
