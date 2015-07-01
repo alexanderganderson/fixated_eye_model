@@ -1,7 +1,7 @@
 from model import *
 from analyzer import *
 from scipy.io import loadmat
-from main.utils.image_gen import ImageGenerator
+from utils.image_gen import ImageGenerator
 
 # Tests the algorithm using a '0' from mnist and a sparse coding dictionary
 

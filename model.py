@@ -6,7 +6,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 import os
-from utils.path_generator import DiffusionPathGenerator
+from utils.path_generator import DiffusionPathGenerator, ExperimentalPathGenerator
 import utils.particle_filter_new as pf
 from utils.theano_gradient_routines import ada_delta
 from utils.SNR import SNR
@@ -153,7 +153,8 @@ class EMBurak:
 
         self.init_theano_core()
         self.set_gain_factor()
-        self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.DC, self.dt)
+        #self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.DC, self.dt)
+        self.pg = ExperimentalPathGenerator(self.n_t, 'data/resampled_paths.mat', self.dt)
         self.init_particle_filter()
 
         if (self.save_mode):
