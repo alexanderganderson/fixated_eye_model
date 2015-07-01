@@ -1,12 +1,12 @@
-from main.model import *
-from main.analyzer import *
+from model import *
+from analyzer import *
 from scipy.io import loadmat
 from main.utils.image_gen import ImageGenerator
 
 # Tests the algorithm using a '0' from mnist and a sparse coding dictionary
 
 try:
-    data = loadmat('main/data/mnist_dictionary.mat')
+    data = loadmat('data/mnist_dictionary.mat')
     D = data['D']
 except IOError:
     print 'Need to have a dictionary file'

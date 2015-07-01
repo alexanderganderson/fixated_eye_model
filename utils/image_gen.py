@@ -33,7 +33,7 @@ class ImageGenerator:
             raise ValueError('To create a digit, L_I = 14')
 
         try:
-            data = loadmat('main/data/mnist_small.mat')
+            data = loadmat('data/mnist_small.mat')
             IMAGES = data['IMAGES']
             LABELS = data['LABELS'][0]
 
