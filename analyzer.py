@@ -221,14 +221,36 @@ class DataAnalyzer:
             self.plot_EM_estimate(q)
             plt.savefig('img%d.png' % (100 + q))
 
-    def plot_spikes(t):
+    def compute_spike_moving_average(self, tau = 0.005):
+        """
+        Computes the exponential moving average of the spikes
+        tau - time constant of moving average, should be a multiple of self.DT
+        """
+        rho = 1 - self.DT / tau
+        Rav = np.zeros_like(self.R)
+
+        Rav[:, 0] = self.R[:, 0]
+        for i in range(1, self.N_T):
+            Rav[:, i] = rho * Rav[:, i - 1] + (1 - rho) * self.R[:, i]
+
+        self.Rav = Rav
+
+    def plot_spikes(self, t, moving_average = False):
         """
         Plots the spiking profile at time t
         t - time to plot spikes
         """
         if t > self.N_T:
             raise ValueError('time does not go past a certain time')
-        s = self.R[:, t]
+        if not moving_average:
+            s = self.R[:, t]
+        else:
+            try:
+                self.Rav
+            except AttributeError:
+                self.compute_spike_moving_average()
+            s = self.Rav[:, t]
+
         l = s.shape[0]
         of = s[0:l/2]
         on = s[l/2:l]
@@ -238,12 +260,13 @@ class DataAnalyzer:
                    interpolation = 'nearest', cmap = plt.cm.gray_r)
         plt.title('ON Cells')
         plt.xlabel('arcmin')
+        plt.colorbar()
 
         plt.subplot(1, 2, 2)
         plt.imshow(of.reshape(self.L_N, self.L_N),
                    interpolation = 'nearest', cmap = plt.cm.gray_r)
         plt.title('OFF Cells')
-        
+        plt.colorbar()
 
 
     def plot_RFs(self):
