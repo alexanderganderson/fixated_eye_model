@@ -565,7 +565,7 @@ class EMBurak:
         """
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
-        data = {'DT': self.dt, 'DC': self.DC, 'L0': self.L0, 'L1': self.L1, 'GAMMA': self.gamma, 'LAMBDA': self.LAMBDA,
+        self.data = {'DT': self.dt, 'DC': self.DC, 'L0': self.L0, 'L1': self.L1, 'GAMMA': self.gamma, 'LAMBDA': self.LAMBDA,
                 'D': self.d, 'N_L': self.n_l, 'a': self.a, 'N_T': self.n_t, 'L_I': self.l_i, 'L_N': self.l_n,
                 'Rho': self.rho, 'Eps': self.eps, 'N_g_itr': self.n_g_itr, 'N_itr': self.N_itr, 'N_P': self.N_P,
                 'XS': self.XS, 'YS': self.YS, 'XE': self.XE, 'YE': self.YE, 'Var': self.Var, 'G': self.G, 'XR': self.XR,
