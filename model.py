@@ -86,6 +86,7 @@ class EMBurak:
         self.N_P = 25  # Number of particles for the EM
 
         # Initialize pixel and LGN positions
+        self.a = a  # pixel spacing
         # Position of pixels
         self.XS = np.arange(- self.l_i / 2, self.l_i / 2)
         self.YS = np.arange(- self.l_i / 2, self.l_i / 2)
@@ -95,7 +96,7 @@ class EMBurak:
         self.YS *= self.a
 
         # Position of LGN receptive fields
-        self.a = a  # Receptive field spacing
+
 
         self.n_n = 2 * self.l_n ** 2
         self.XE, self.YE = np.meshgrid(np.arange(- self.l_n / 2, self.l_n / 2),
