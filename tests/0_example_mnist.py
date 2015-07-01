@@ -27,6 +27,8 @@ emb = EMBurak(S_gen, D, n_t=30, save_mode=True, s_gen_name=S_gen_name)
 emb.gen_data()
 emb.run_EM()
 
+emb.save()
+
 da = DataAnalyzer(emb.data)
 
 # Plot the Estimated Image and Path after the algorithm ran
