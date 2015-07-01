@@ -19,7 +19,8 @@ class EMBurak:
     def __init__(self, s_gen, d, dt=0.001, dc=100.,
                  n_t=50,
                  l_n=14, a=1., LAMBDA=1., save_mode=False,
-                 n_itr=10, s_gen_name=' '):
+                 n_itr=10, s_gen_name=' ',
+                 path_mode = 'Diffusion'):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -155,8 +156,14 @@ class EMBurak:
 
         self.init_theano_core()
         self.set_gain_factor()
-        #self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.DC, self.dt)
-        self.pg = ExperimentalPathGenerator(self.n_t, 'data/resampled_paths.mat', self.dt)
+
+        if path_mode == 'Diffusion':
+            self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.DC, self.dt)
+        elif path_mode == 'Experiment':
+            self.pg = ExperimentalPathGenerator(self.n_t, 'data/resampled_paths.mat', self.dt)
+        else:
+            raise ValueError('path_mode must be Diffusion of Experiment')
+
         self.init_particle_filter()
 
         if (self.save_mode):
