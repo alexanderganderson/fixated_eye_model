@@ -90,6 +90,8 @@ class EMBurak:
         self.YS = np.arange(- self.l_i / 2, self.l_i / 2)
         self.XS = self.XS.astype('float32')
         self.YS = self.YS.astype('float32')
+        self.XS *= self.a
+        self.YS *= self.a
 
         # Position of LGN receptive fields
         self.a = a  # Receptive field spacing
@@ -100,8 +102,8 @@ class EMBurak:
 
         self.XE = self.XE.ravel().astype('float32')
         self.YE = self.YE.ravel().astype('float32')
-        self.XE *= self.a
-        self.YE *= self.a
+#        self.XE *= self.a
+#        self.YE *= self.a
 
         def double_array(m):
             """

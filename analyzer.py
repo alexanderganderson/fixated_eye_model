@@ -179,17 +179,24 @@ class DataAnalyzer:
         vmax = m2 + 0.1 * (m2 - m1)
     
         sdev = float(np.sqrt(self.Var))    
-        dt = self.DT * self.data['EM_data'][q]['time_steps'] * 1000.
+        n_time_steps = self.data['EM_data'][q]['time_steps']
+        t_ms = self.DT * n_time_steps  * 1000.
 
         fig = plt.figure(figsize = (10, 8))
-        fig.suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f, LAMBDA = %0.2f' % (dt, self.DC, self.LAMBDA))
+        fig.suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f, LAMBDA = %0.2f' % (t_ms, self.DC, self.LAMBDA))
         
         # Note actual image is convolved with a gaussian during the simulation 
         #   even though the image saved has not has this happen yet
 
 
-        plt.subplot(2, 2, 1)
-        plt.title('Estimated Image, S = DA: SNR = %.2f' 
+        plt.subplot(2, 3, 2)
+        self.plot_spikes(n_time_steps, moving_average = True, mode = 'ON')
+        
+        plt.subplot(2, 3, 3)
+        self.plot_spikes(n_time_steps, moving_average = True, mode = 'OFF')
+
+        plt.subplot(2, 3, 4)
+        plt.title('Estimated Image, S = DA:\n SNR = %.2f' 
                   % self.SNR_idx(q))
         S_est = self.data['EM_data'][q]['image_est']
 
@@ -199,17 +206,17 @@ class DataAnalyzer:
         plt.colorbar()
 
 
-        plt.subplot(2, 2, 2)
+        plt.subplot(2, 3, 1)
         plt.title('Actual Image')
         plt.imshow(gaussian_filter(self.S_gen, sdev), 
                    cmap = plt.cm.gray, interpolation = 'nearest',
                    vmin = vmin, vmax = vmax)
         plt.colorbar()
     
-        plt.subplot(2, 2, 3)
+        plt.subplot(2, 3, 5)
         self.plot_path_estimate(q, 0)
 
-        plt.subplot(2, 2, 4)
+        plt.subplot(2, 3, 6)
         self.plot_path_estimate(q, 1)
 
         plt.tight_layout()
@@ -225,6 +232,7 @@ class DataAnalyzer:
         """
         Computes the exponential moving average of the spikes
         tau - time constant of moving average, should be a multiple of self.DT
+        Saves an array self.Rav -> EMA of firing rate for each neuron
         """
         rho = 1 - self.DT / tau
         Rav = np.zeros_like(self.R)
@@ -233,12 +241,12 @@ class DataAnalyzer:
         for i in range(1, self.N_T):
             Rav[:, i] = rho * Rav[:, i - 1] + (1 - rho) * self.R[:, i]
 
-        self.Rav = Rav
+        self.Rav = Rav / self.DT
 
-    def plot_spikes(self, t, moving_average = False):
+    def plot_spikes(self, t, moving_average = False, mode = 'ON'):
         """
-        Plots the spiking profile at time t
-        t - time to plot spikes
+        Plots the spiking profile at timestep number t
+        t - timestep number to plot
         """
         if t > self.N_T:
             raise ValueError('time does not go past a certain time')
@@ -252,21 +260,24 @@ class DataAnalyzer:
             s = self.Rav[:, t]
 
         l = s.shape[0]
-        of = s[0:l/2]
-        on = s[l/2:l]
-        
-        plt.subplot(1, 2, 1)
-        plt.imshow(on.reshape(self.L_N, self.L_N), 
-                   interpolation = 'nearest', cmap = plt.cm.gray_r)
-        plt.title('ON Cells')
-        plt.xlabel('arcmin')
-        plt.colorbar()
 
-        plt.subplot(1, 2, 2)
-        plt.imshow(of.reshape(self.L_N, self.L_N),
-                   interpolation = 'nearest', cmap = plt.cm.gray_r)
-        plt.title('OFF Cells')
-        plt.colorbar()
+        if mode == 'OFF':
+            spikes = s[0:l/2]
+        elif mode == 'ON':
+            spikes = s[l/2:l]
+        else:
+            raise ValueError('mode must be on or off')
+
+        vmin = 0.
+        vmax = 200.
+
+        plt.imshow(spikes.reshape(self.L_N, self.L_N), 
+                   interpolation = 'nearest', cmap = plt.cm.gray_r,
+                   vmin = vmin, vmax = vmax)
+        plt.title(mode + ' Cells')
+        plt.xlabel('arcmin')
+#        plt.colorbar()
+
 
 
     def plot_RFs(self):
