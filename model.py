@@ -572,7 +572,6 @@ class EMBurak:
                 'YR': self.YR, 'IE': self.IE, 'path_mode': self.pg.path_mode(), 'S_gen': self.s_gen,
                 'S_gen_name': self.s_gen_name, 'R': self.R}
 
-    @property
     def save(self):
         """
         Saves information relevant to the EM run
