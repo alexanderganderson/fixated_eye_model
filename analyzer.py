@@ -63,6 +63,8 @@ class DataAnalyzer:
         self.DC = self.data['DC']
         self.L_I = self.data['L_I']
         self.LAMBDA = self.data['LAMBDA']
+        self.R = self.data['R']
+        self.L_N = self.data['L_N']
 
         # Convert retinal positions to grid
         XS = self.data['XS']
@@ -218,6 +220,31 @@ class DataAnalyzer:
             plt.clf()
             self.plot_EM_estimate(q)
             plt.savefig('img%d.png' % (100 + q))
+
+    def plot_spikes(t):
+        """
+        Plots the spiking profile at time t
+        t - time to plot spikes
+        """
+        if t > self.N_T:
+            raise ValueError('time does not go past a certain time')
+        s = self.R[:, t]
+        l = s.shape[0]
+        of = s[0:l/2]
+        on = s[l/2:l]
+        
+        plt.subplot(1, 2, 1)
+        plt.imshow(on.reshape(self.L_N, self.L_N), 
+                   interpolation = 'nearest', cmap = plt.cm.gray_r)
+        plt.title('ON Cells')
+        plt.xlabel('arcmin')
+
+        plt.subplot(1, 2, 2)
+        plt.imshow(of.reshape(self.L_N, self.L_N),
+                   interpolation = 'nearest', cmap = plt.cm.gray_r)
+        plt.title('OFF Cells')
+        
+
 
     def plot_RFs(self):
         """
