@@ -417,7 +417,7 @@ class EMBurak:
         """
         # Define necessary components for the particle filter
         D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
-        sdev = np.sqrt(self.DC * self.dt / 2)  # Needs to be sdev per component
+        sdev = np.sqrt(self.DC * self.dt / 2) * np.ones((D_H,))  # Needs to be sdev per component
         ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
         tpd = pf.GaussTPD(D_H, self.n_n, sdev)
         ip = pf.GaussIP(D_H, sdev * 0.001)
