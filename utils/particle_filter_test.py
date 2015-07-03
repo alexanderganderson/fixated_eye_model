@@ -48,9 +48,11 @@ class TransitionProposalDistributionTest(unittest.TestCase):
     def setUp(self):
         self.D_H = 2
         self.D_O = self.D_H
-        self.N_S = 100
+        self.N_S = 50
         self.sigmas = 0.1 * np.ones((self.D_H,))
-        self.tpd = PF.GaussTPD(self.D_H, self.D_O, self.sigmas)
+        self.A = np.array([[0, 1],
+                           [0, 0]])
+        self.tpd = PF.GaussTPD(self.D_H, self.D_O, self.sigmas, self.A)
 
     def testInit(self):
         self.assertEquals(self.D_H, self.tpd.D_H)
@@ -61,21 +63,24 @@ class TransitionProposalDistributionTest(unittest.TestCase):
         Xc = np.zeros((self.N_S, self.D_H))
         Yc = np.zeros((self.D_O,))
         Xp = np.zeros((self.N_S, self.D_H))
+        Xp[:, 0] = 1.
         expt = (np.ones((self.N_S,)) / 
                 np.prod(np.sqrt(2 * np.pi * self.sigmas ** 2)))
         self.failUnlessAlmostEqual(expt[0], self.tpd.prob(Xc, Yc, Xp)[0])
 
     def testSample(self):
-        Xp = np.ones((self.N_S, self.D_H))
+        Xp = np.zeros((self.N_S, self.D_H))
+        Xp[:, 0] = 1
         Yc = np.zeros((self.D_O,))
         m = np.mean(self.tpd.sample(Yc, Xp), axis = 0)
-        self.failUnlessAlmostEqual(Xp[0, 0], m[0], places = 1)
+        self.failUnlessAlmostEqual(0, m[0], places = 1)
         
 
 class InitialPotentialTest(unittest.TestCase):
     def setUp(self):
         self.D_H = 4
         self.N_S = 1
+
         self.sigmas = 1.5 * np.ones((self.D_H,))
         self.ip = PF.GaussIP(self.D_H, self.sigmas)
 
@@ -86,6 +91,27 @@ class InitialPotentialTest(unittest.TestCase):
         X0 = np.zeros((self.N_S, self.D_H))
         ans = np.prod(1. / np.sqrt(2 * np.pi * self.sigmas ** 2))
         self.failUnlessAlmostEqual(ans, self.ip.prob(X0)[0], places = 3)
+
+class TransitionPotentialTest(unittest.TestCase):
+    def setUp(self):
+        self.D_H = 2
+        self.N_S = 10
+        self.sigmas = 1.5 * np.ones((self.D_H,))
+        self.A = np.array([[0, 1],
+                           [0, 0]])
+        self.tp = PF.GaussTP(self.D_H, self.sigmas, self.A)
+
+    def testInit(self):
+        self.assertEquals(self.D_H, self.tp.D_H)
+        self.assertEquals(self.A[0, 0], self.tp.A[0, 0])
+
+    def testProb(self):
+        Xp = np.zeros((self.N_S, self.D_H))
+        Xp[:, 0] = 1.
+        Xc = np.zeros((self.N_S, self.D_H))
+        ans = np.prod(1. / np.sqrt(2 * np.pi * self.sigmas ** 2))
+        self.failUnlessAlmostEqual(ans, 
+                                   self.tp.prob(Xc, Xp)[0], places = 3)
 
 class LikelihoodPotentialTest(unittest.TestCase):
     def setUp(self):

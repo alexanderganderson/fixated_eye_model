@@ -68,7 +68,7 @@ class GaussIPD(InitPropDist):
         """
         Create a simple Gaussian proposal distribution for the
             initial state:
-        q(X_0|Y_0) = N(0, sigma)
+        q(X_0|Y_0) = N(0, sigmas)
         sigmas - standard deviation for each variable in form (D_H,)
         D_H - dimension of hidden state
         D_O - dimension of observed state
@@ -144,21 +144,26 @@ class TransPropDist():
         
 
 class GaussTPD(TransPropDist):
-    def __init__(self, D_H, D_O, sigmas):
+    def __init__(self, D_H, D_O, sigmas, A = None):
         """
         Simple gaussian transition proposal distribution:
-            q(Xc|Yc, Xp) ~ N(mu = Xp, sigma)
-        sigma - standard deviation for the proposal
+            q(Xc|Yc, Xp) ~ N(mu = A * Xp, sigmas)
+        sigmas - standard deviations for the proposal
         D_H - dimension of hidden state of the markov model
+        A - transition matrix, assume X_t's are column vectors and
+             Xtp1 = A xt
         """
         TransPropDist.__init__(self, D_H, D_O)
+        if A is None:
+            A = np.eye(self.D_H)
         self.sigmas = sigmas
-        
+        self.A = A
+
     def prob(self, Xc, Yc, Xp):
         """
         Returns the probability N(mu = Xp, sigma)(Xc)
         """
-        return gauss_pdf(Xc - Xp, self.sigmas)
+        return gauss_pdf(Xc - np.dot(Xp, np.transpose(self.A)), self.sigmas)
     
     def sample(self, Yc, Xp):
         """
@@ -166,7 +171,8 @@ class GaussTPD(TransPropDist):
         Yc - Current observed state
         Xp - previous hidden state, each particle comes in as a row
         """
-        return np.random.randn(*Xp.shape) * self.sigmas + Xp
+        return (np.random.randn(*Xp.shape) * self.sigmas 
+                + np.dot(Xp, np.transpose(self.A)))
 
 
 # In addition to proposal distributions, we have potentials that give us
@@ -231,25 +237,33 @@ class TransPotential():
         if not Xp.shape[1] == self.D_H:
             raise TypeError('Xp[0] has incorrect dimension')
 
+
 class GaussTP(TransPotential):
     """
     Gaussian transition probability potential:
     p(Xc|Xp) = N(mu = Xp, sigma)
     """
-    def __init__(self, D_H, sigmas):
+    def __init__(self, D_H, sigmas, A = None):
         """
         sigma - standard deviation
         D_H - dimension of hidden state
+        A = transition matrix, so that
+            Xc = A Xp where Xc,Xp are column vectors
         """
         TransPotential.__init__(self, D_H)
         self.sigmas = sigmas
-        
+        if A is None:
+            self.A = np.eye(self.D_H)
+        else:
+            self.A = A
+
     def prob(self, Xc, Xp):
         """
         Return p(Xc|Xp)
         """
         TransPotential.prob(self, Xc, Xp)
-        return gauss_pdf(Xc - Xp, self.sigmas)
+        return gauss_pdf(Xc - np.dot(Xp, np.transpose(self.A)), 
+                         self.sigmas)
 
 
 class LikelihoodPotential():
