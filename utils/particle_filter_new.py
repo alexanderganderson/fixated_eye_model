@@ -10,11 +10,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def gauss(X, s):
+def gauss_pdf(X, s):
     """
-    Gaussian PDF with sdev = s
+    Gaussian PDF with diagonal covariance
+    s = vector of size (D_H,) giving standard deviations for each dimension
+    X - input of dimension (N_S, D_H)
+    Note this makes use of numpy broadcasting by comparing last axes first
+       so it still works when N_S = D_H
+    Returns probabilities for each sample
     """
-    return np.exp(- 0.5 * X ** 2 / s ** 2) / np.sqrt(2 * np.pi * s ** 2)
+    return np.prod(np.exp(- 0.5 * X ** 2 / s ** 2) 
+                   / np.sqrt(2 * np.pi * s ** 2), axis = 1)
 
 
 class InitPropDist():
@@ -58,17 +64,17 @@ class InitPropDist():
 
 
 class GaussIPD(InitPropDist):
-    def __init__(self, D_H, D_O, sigma):
+    def __init__(self, D_H, D_O, sigmas):
         """
         Create a simple Gaussian proposal distribution for the
             initial state:
         q(X_0|Y_0) = N(0, sigma)
-        sigma - variance
+        sigmas - standard deviation for each variable in form (D_H,)
         D_H - dimension of hidden state
         D_O - dimension of observed state
         """
         InitPropDist.__init__(self, D_H, D_O)
-        self.sigma = sigma
+        self.sigmas = sigmas
     
     def prob(self, X0, Y0):
         """
@@ -77,7 +83,7 @@ class GaussIPD(InitPropDist):
         Y0 - Initial observed state
         """
         InitPropDist.prob(self, X0, Y0)
-        return np.prod(gauss(X0, self.sigma), axis = 1)
+        return gauss_pdf(X0, self.sigmas)
     
     def sample(self, Y0, N_S):
         """
@@ -87,7 +93,7 @@ class GaussIPD(InitPropDist):
         Returns samples as rows
         """
         InitPropDist.sample(self, Y0, N_S)
-        return (self.sigma * np.random.randn(N_S, self.D_H))
+        return (self.sigmas * np.random.randn(N_S, self.D_H))
 
 
 class TransPropDist():
@@ -138,7 +144,7 @@ class TransPropDist():
         
 
 class GaussTPD(TransPropDist):
-    def __init__(self, D_H, D_O, sigma):
+    def __init__(self, D_H, D_O, sigmas):
         """
         Simple gaussian transition proposal distribution:
             q(Xc|Yc, Xp) ~ N(mu = Xp, sigma)
@@ -146,14 +152,13 @@ class GaussTPD(TransPropDist):
         D_H - dimension of hidden state of the markov model
         """
         TransPropDist.__init__(self, D_H, D_O)
-        self.sigma = sigma
+        self.sigmas = sigmas
         
     def prob(self, Xc, Yc, Xp):
-
         """
         Returns the probability N(mu = Xp, sigma)(Xc)
         """
-        return np.prod(gauss(Xc - Xp, self.sigma), axis = 1)
+        return gauss_pdf(Xc - Xp, self.sigmas)
     
     def sample(self, Yc, Xp):
         """
@@ -161,7 +166,7 @@ class GaussTPD(TransPropDist):
         Yc - Current observed state
         Xp - previous hidden state, each particle comes in as a row
         """
-        return np.random.randn(*Xp.shape) * self.sigma + Xp
+        return np.random.randn(*Xp.shape) * self.sigmas + Xp
 
 
 # In addition to proposal distributions, we have potentials that give us
@@ -189,7 +194,7 @@ class InitialPotential:
 
 
 class GaussIP(InitialPotential):
-    def __init__(self, D_H, sigma):
+    def __init__(self, D_H, sigmas):
         """
         Simple Prior for the initial hidden state
             p(X0) = N(0, sigma)
@@ -197,11 +202,11 @@ class GaussIP(InitialPotential):
         D_H - dimension of hidden state
         """
         InitialPotential.__init__(self, D_H)
-        self.sigma = sigma
+        self.sigmas = sigmas
 
     def prob(self, X0):
         InitialPotential.prob(self, X0)
-        return np.prod(gauss(X0, self.sigma), axis = 1)
+        return gauss_pdf(X0, self.sigmas)
 
 class TransPotential():
     __meta__ = abc.ABCMeta
@@ -231,20 +236,20 @@ class GaussTP(TransPotential):
     Gaussian transition probability potential:
     p(Xc|Xp) = N(mu = Xp, sigma)
     """
-    def __init__(self, D_H, sigma):
+    def __init__(self, D_H, sigmas):
         """
         sigma - standard deviation
         D_H - dimension of hidden state
         """
         TransPotential.__init__(self, D_H)
-        self.sigma = sigma
+        self.sigmas = sigmas
         
     def prob(self, Xc, Xp):
         """
         Return p(Xc|Xp)
         """
         TransPotential.prob(self, Xc, Xp)
-        return np.prod(gauss(Xc - Xp, self.sigma), axis = 1)
+        return gauss_pdf(Xc - Xp, self.sigmas)
 
 
 class LikelihoodPotential():
@@ -280,15 +285,15 @@ class GaussLP(LikelihoodPotential):
     """
     Simple gaussian likelihood p(Yc|Xc) = N(mu = Xc, _sigma)
     """
-    def __init__(self, D_H, D_O, sigma):
+    def __init__(self, D_H, D_O, sigmas):
         LikelihoodPotential.__init__(self, D_H, D_O)
         if not self.D_H == self.D_O:
             raise ValueError('Input and output dimension must match')
-        self.sigma = sigma
+        self.sigmas = sigmas
     
     def prob(self, Yc, Xc):
         LikelihoodPotential.prob(self, Yc, Xc)
-        return np.prod(gauss(Yc - Xc, self.sigma), axis = 1)
+        return gauss_pdf(Yc - Xc, self.sigmas)
 
 
 class ParticleFilter:

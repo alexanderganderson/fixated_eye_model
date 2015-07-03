@@ -190,10 +190,10 @@ class DataAnalyzer:
 
 
         plt.subplot(2, 3, 2)
-        self.plot_spikes(n_time_steps, moving_average = True, mode = 'ON')
+        self.plot_spikes(n_time_steps - 1, moving_average = True, mode = 'ON')
         
         plt.subplot(2, 3, 3)
-        self.plot_spikes(n_time_steps, moving_average = True, mode = 'OFF')
+        self.plot_spikes(n_time_steps - 1, moving_average = True, mode = 'OFF')
 
         plt.subplot(2, 3, 4)
         plt.title('Estimated Image, S = DA:\n SNR = %.2f' 
