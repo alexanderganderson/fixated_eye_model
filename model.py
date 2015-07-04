@@ -422,7 +422,7 @@ class EMBurak:
         tpd = pf.GaussTPD(D_H, self.n_n, sdev)
         ip = pf.GaussIP(D_H, sdev * 0.001)
         tp = pf.GaussTP(D_H, sdev)
-        lp = PoissonLP(self.n_n, self.L0, self.L1,
+        lp = PoissonLP(self.n_n, 2, self.L0, self.L1,
                        self.dt, self.G, self.spike_energy)
         self.pf = pf.ParticleFilter(ipd, tpd, ip, tp, lp,
                                     self.R.transpose(), self.N_P)
