@@ -16,8 +16,7 @@ from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
-    def __init__(self, s_gen, d, dt=0.001, dc=100.,
-                 n_t=50,
+    def __init__(self, s_gen, d, dt=0.001, dc=100., n_t=50,
                  l_n=14, a=1., LAMBDA=1., save_mode=False,
                  n_itr=10, s_gen_name=' ',
                  path_mode = 'Diffusion',

@@ -161,6 +161,60 @@ class DataAnalyzer:
         #plt.legend()
         plt.title(label + ' Pos., shift = %.2f' % dxy)
 
+    def plot_velocity_estimate(self, q, d):
+        """
+        Plot the estimate of the velocity by the EM algorithm
+        q - EM iteration number
+        d - dimension to plot (0 or 1)
+        """
+        if not self.data['motion_prior'] == 'VelocityDiffusion':
+            raise RuntimeError('No velocity for this motion prior')
+
+        est_mean = self.data['EM_data'][q]['path_means']
+        est_sdev = self.data['EM_data'][q]['path_sdevs']
+        
+        if (d == 0):
+            label = 'Hor.'
+        elif (d == 1):
+            label = 'Ver.'
+        else:
+            raise ValueError('d must be either 0 or 1')
+        
+        t = self.data['EM_data'][q]['time_steps']
+
+        d = d + 2 # Correct index for est_mean
+
+        plt.fill_between(self.DT * np.arange(self.N_T), 
+                         est_mean[:, d] - est_sdev[:, d], 
+                         est_mean[:, d] + est_sdev[:, d], 
+                         alpha = 0.5, linewidth = 1.)
+        plt.plot(self.DT * np.arange(self.N_T), 
+                 est_mean[:, d], label = 'estimate')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Velocity (pixels/sec)')
+        #plt.legend()
+
+    def plot_dynamic_vars(self, q):
+        """
+        Plots all of the dynamic variables (x, y, vx, vy) 
+        as estimated after iteration q
+        """
+        if not self.data['motion_prior'] == 'VelocityDiffusion':
+            raise RuntimeError('Run has no velocity estimate')
+
+        plt.subplot(2, 2, 1)
+        self.plot_path_estimate(q, 0)
+
+        plt.subplot(2, 2, 2)
+        self.plot_path_estimate(q, 1)
+
+        plt.subplot(2, 2, 3)
+        self.plot_velocity_estimate(q, 0)
+
+        plt.subplot(2, 2, 4)
+        self.plot_velocity_estimate(q, 1)
+
+
     def plot_EM_estimate(self, q):
         """
         Creates a full plot of the estimated image, actual image, 
