@@ -20,7 +20,8 @@ class EMBurak:
                  n_t=50,
                  l_n=14, a=1., LAMBDA=1., save_mode=False,
                  n_itr=10, s_gen_name=' ',
-                 path_mode = 'Diffusion'):
+                 path_mode = 'Diffusion',
+                 motion_prior = 'PositionDiffusion'):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -165,6 +166,7 @@ class EMBurak:
         else:
             raise ValueError('path_mode must be Diffusion of Experiment')
 
+        self.motion_prior = motion_prior
         self.init_particle_filter()
 
         if (self.save_mode):
@@ -416,14 +418,43 @@ class EMBurak:
         Requires spikes to already be generated
         """
         # Define necessary components for the particle filter
-        D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
-        sdev = np.sqrt(self.DC * self.dt / 2) * np.ones((D_H,))  # Needs to be sdev per component
-        ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
-        tpd = pf.GaussTPD(D_H, self.n_n, sdev)
-        ip = pf.GaussIP(D_H, sdev * 0.001)
-        tp = pf.GaussTP(D_H, sdev)
-        lp = PoissonLP(self.n_n, 2, self.L0, self.L1,
-                       self.dt, self.G, self.spike_energy)
+        if self.motion_prior == 'PositionDiffusion':
+            # Diffusion
+            D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
+            sdev = np.sqrt(self.DC * self.dt / 2) * np.ones((D_H,))
+            ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
+            tpd = pf.GaussTPD(D_H, self.n_n, sdev)
+            ip = pf.GaussIP(D_H, sdev * 0.001)
+            tp = pf.GaussTP(D_H, sdev)
+            lp = PoissonLP(self.n_n, D_H, self.L0, self.L1,
+                           self.dt, self.G, self.spike_energy)
+
+        elif self.motion_prior == 'VelocityDiffusion':
+            D_H = 4
+            v0 = 30. # Initial Estimate for velocity
+            dcv = 6. # Velocity Diffusion Constant
+            st = np.sqrt(dcv * self.dt)
+
+            eps = 0.00001 # Small number since cannot have exact zero
+            sigma0 = np.array([eps, eps, v0, v0]) # Initial sigmas
+            sigma_t = np.array([eps, eps, st, st]) # Transition sigmas
+
+            # Transition matrix
+            A = np.array([[1, 0, self.dt, 0],
+                          [0, 1, 0, self.dt],
+                          [0, 0, 1, 0],
+                          [0, 0, 0, 1]])
+
+            ipd = pf.GaussIPD(D_H, self.n_n, sigma0)
+            tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A = A)
+            ip = pf.GaussIP(D_H, sigma0)
+            tp = pf.GaussTP(D_H, sigma_t, A = A)
+            lp = PoissonLP(self.n_n, D_H, self.L0, self.L1,
+                           self.dt, self.G, self.spike_energy)
+
+        else:
+            raise ValueError('Unrecognized Motion Prior ' + str(self.motion_prior))
+
         self.pf = pf.ParticleFilter(ipd, tpd, ip, tp, lp,
                                     self.R.transpose(), self.N_P)
 
@@ -580,7 +611,7 @@ class EMBurak:
                 'Rho': self.rho, 'Eps': self.eps, 'N_g_itr': self.n_g_itr, 'N_itr': self.N_itr, 'N_P': self.N_P,
                 'XS': self.XS, 'YS': self.YS, 'XE': self.XE, 'YE': self.YE, 'Var': self.Var, 'G': self.G, 'XR': self.XR,
                 'YR': self.YR, 'IE': self.IE, 'path_mode': self.pg.path_mode(), 'S_gen': self.s_gen,
-                'S_gen_name': self.s_gen_name, 'R': self.R}
+                'S_gen_name': self.s_gen_name, 'R': self.R, 'motion_prior' = self.motion_prior}
 
     def save(self):
         """

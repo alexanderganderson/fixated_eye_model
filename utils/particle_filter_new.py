@@ -156,6 +156,8 @@ class GaussTPD(TransPropDist):
         TransPropDist.__init__(self, D_H, D_O)
         if A is None:
             A = np.eye(self.D_H)
+        if not (self.D_H == A.shape[0] and self.D_H == A.shape[1]):
+            raise ValueError('Wrong Shape for Transition matrix, A')
         self.sigmas = sigmas
         self.A = A
 
