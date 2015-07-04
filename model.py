@@ -61,10 +61,10 @@ class EMBurak:
 
         # Simulation Parameters
         self.dt = dt  # Simulation timestep
-        self.DC = dc  # Diffusion Constant
-        print 'The diffusion constant is ' + str(self.DC)
-        self.L0 = 10.
-        self.L1 = 100.
+        self.dc = dc  # Diffusion Constant
+        print 'The diffusion constant is ' + str(self.dc)
+        self.l0 = 10.
+        self.l1 = 100.
 
         # Problem Dimensions
         self.n_t = n_t  # Number of time steps
@@ -81,10 +81,10 @@ class EMBurak:
         self.rho = 0.4
         self.eps = 0.001
         self.n_g_itr = 10
-        self.N_itr = n_itr
+        self.n_itr = n_itr
 
         # E Parameters (Particle Filter)
-        self.N_P = 25  # Number of particles for the EM
+        self.n_p = 25  # Number of particles for the EM
 
         # Initialize pixel and LGN positions
         self.a = a  # pixel spacing
@@ -160,7 +160,7 @@ class EMBurak:
         self.set_gain_factor()
 
         if path_mode == 'Diffusion':
-            self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.DC, self.dt)
+            self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.dc, self.dt)
         elif path_mode == 'Experiment':
             self.pg = ExperimentalPathGenerator(self.n_t, 'data/resampled_paths.mat', self.dt)
         else:
@@ -408,7 +408,7 @@ class EMBurak:
         """
         self.G = 1.
         Ips, FP = self.RFS(np.ones_like(self.s_gen), self.XR, self.YR,
-                           self.L0, self.L1,
+                           self.l0, self.l1,
                            self.dt, self.G)
         self.G = (1. / Ips.max()).astype('float32')
 
@@ -421,12 +421,12 @@ class EMBurak:
         if self.motion_prior == 'PositionDiffusion':
             # Diffusion
             D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
-            sdev = np.sqrt(self.DC * self.dt / 2) * np.ones((D_H,))
+            sdev = np.sqrt(self.dc * self.dt / 2) * np.ones((D_H,))
             ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
             tpd = pf.GaussTPD(D_H, self.n_n, sdev)
             ip = pf.GaussIP(D_H, sdev * 0.001)
             tp = pf.GaussTP(D_H, sdev)
-            lp = PoissonLP(self.n_n, D_H, self.L0, self.L1,
+            lp = PoissonLP(self.n_n, D_H, self.l0, self.l1,
                            self.dt, self.G, self.spike_energy)
 
         elif self.motion_prior == 'VelocityDiffusion':
@@ -449,21 +449,21 @@ class EMBurak:
             tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A = A)
             ip = pf.GaussIP(D_H, sigma0)
             tp = pf.GaussTP(D_H, sigma_t, A = A)
-            lp = PoissonLP(self.n_n, D_H, self.L0, self.L1,
+            lp = PoissonLP(self.n_n, D_H, self.l0, self.l1,
                            self.dt, self.G, self.spike_energy)
 
         else:
             raise ValueError('Unrecognized Motion Prior ' + str(self.motion_prior))
 
         self.pf = pf.ParticleFilter(ipd, tpd, ip, tp, lp,
-                                    self.R.transpose(), self.N_P)
+                                    self.R.transpose(), self.n_p)
 
     def gen_spikes(self):
         """
         Generate LGN responses given the path and the image
         """
-        self.R[:, :] = self.spikes(self.s_gen, self.XR, self.YR, self.L0,
-                                   self.L1, self.dt, self.G)[0]
+        self.R[:, :] = self.spikes(self.s_gen, self.XR, self.YR, self.l0,
+                                   self.l1, self.dt, self.G)[0]
         print 'Mean firing rate ' + str(self.R.mean() / self.dt)
 
     def true_costs(self):
@@ -474,7 +474,7 @@ class EMBurak:
         """
         print 'Pre-EM testing'
         args = (self.XR, self.YR, self.R, self.Wbt,
-                self.L0, self.L1, self.dt, self.G,
+                self.l0, self.l1, self.dt, self.G,
                 self.gamma, self.LAMBDA)
 
         out = self.costs(*args)
@@ -535,7 +535,7 @@ class EMBurak:
             args = (self.pf.XS[0:t, :, 0].transpose(),
                     self.pf.XS[0:t, :, 1].transpose(),
                     self.R[:, 0:t], self.pf.WS[0:t].transpose(),
-                    self.L0, self.L1, self.dt,
+                    self.l0, self.l1, self.dt,
                     self.G, self.gamma, self.LAMBDA,
                     self.rho, self.eps)
 
@@ -571,8 +571,8 @@ class EMBurak:
 
         print '\n' + 'Running full EM'
 
-        for u in range(self.N_itr):
-            t = self.n_t * (u + 1) / self.N_itr
+        for u in range(self.n_itr):
+            t = self.n_t * (u + 1) / self.n_itr
             print ('\n' + 'Iteration number ' + str(u) +
                    ' Running up time = ' + str(t))
 
@@ -606,12 +606,12 @@ class EMBurak:
         """
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
-        self.data = {'DT': self.dt, 'DC': self.DC, 'L0': self.L0, 'L1': self.L1, 'GAMMA': self.gamma, 'LAMBDA': self.LAMBDA,
-                'D': self.d, 'N_L': self.n_l, 'a': self.a, 'N_T': self.n_t, 'L_I': self.l_i, 'L_N': self.l_n,
-                'Rho': self.rho, 'Eps': self.eps, 'N_g_itr': self.n_g_itr, 'N_itr': self.N_itr, 'N_P': self.N_P,
-                'XS': self.XS, 'YS': self.YS, 'XE': self.XE, 'YE': self.YE, 'Var': self.Var, 'G': self.G, 'XR': self.XR,
-                'YR': self.YR, 'IE': self.IE, 'path_mode': self.pg.path_mode(), 'S_gen': self.s_gen,
-                'S_gen_name': self.s_gen_name, 'R': self.R, 'motion_prior' = self.motion_prior}
+        self.data = {'DT': self.dt, 'DC': self.dc, 'L0': self.l0, 'L1': self.l1, 'GAMMA': self.gamma,
+                     'LAMBDA': self.LAMBDA, 'D': self.d, 'N_L': self.n_l, 'a': self.a, 'N_T': self.n_t, 'L_I': self.l_i,
+                     'L_N': self.l_n, 'Rho': self.rho, 'Eps': self.eps, 'N_g_itr': self.n_g_itr, 'N_itr': self.n_itr,
+                     'N_P': self.n_p, 'XS': self.XS, 'YS': self.YS, 'XE': self.XE, 'YE': self.YE, 'Var': self.Var,
+                     'G': self.G, 'XR': self.XR, 'YR': self.YR, 'IE': self.IE, 'path_mode': self.pg.path_mode(),
+                     'S_gen': self.s_gen, 'S_gen_name': self.s_gen_name, 'R': self.R, 'motion_prior': self.motion_prior}
 
     def save(self):
         """
