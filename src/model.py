@@ -16,198 +16,24 @@ from utils.time_filename import time_string
 from utils.BurakPoissonLP import PoissonLP
 
 
-class EMBurak:
-
-    def __init__(self, s_gen, d, dt=0.001, dc=100., n_t=50,
-                 l_n=14, a=1., LAMBDA=1., save_mode=False,
-                 n_itr=10, s_gen_name=' ',
-                 actual_motion_mode='Diffusion',
-                 motion_prior='PositionDiffusion'):
-        """
-        Initializes the parts of the EM algorithm
-            -- Sets all parameters
-            -- Initializes Dictionary
-            -- Compiles the theano backend
-            -- Sets the gain factor for the spikes
-            -- Initializes the object that generates the paths
-            -- Initializes the Particle Filter object
-            -- Checks that the output directory exists
-
-        ----------
-        Parameters
-        ----------
-        s_gen : array
-            image that generates the spikes - (L_I, L_I), type = float32
-        d : array
-            dictionary used to infer latent factors,
-               shape = (N_L, N_pix), type = float32
-        s_gen_name : str
-            name of image (eg. label)
-        Checks for consistency L_I ** 2 = N_pix
-
-        Note that changing certain parameters without reinitializing the class
-        may have unexpected effects (because the changes won't necessarily
-        propagate to subclasses.
-        """
-
-        self.data = {}
-        self.output_dir = os.path.join('output/', time_string())
-        self.save_mode = save_mode  # If true, save results after EM completes
-        print 'The save mode is ' + str(save_mode)
-        self.d = d.astype(theano.config.floatX)  # Dictionary
-        self.n_l, self.n_pix = d.shape
-        # n_l - number of latent factors
-        # n_pix - number of pixels in the image
-
-        self.s_gen = s_gen.astype(theano.config.floatX)
-        self.s_gen_name = s_gen_name
-        self.l_i = s_gen.shape[0]  # Linear dimension of the image
-
-        if not self.l_i ** 2 == self.n_pix:
-            raise ValueError('Mismatch between dictionary and image size')
-
-        # Simulation Parameters
-        self.dt = dt  # Simulation timestep
-        self.dc = dc  # Diffusion Constant
-        print 'The diffusion constant is ' + str(self.dc)
-        self.l0 = 10.
-        self.l1 = 100.
-
-        # Problem Dimensions
-        self.n_t = n_t  # Number of time steps
-        self.l_n = l_n  # Linear dimension of neuron receptive field grid
-
-        # Image Prior Parameters
-        self.gamma = 100.  # Pixel out of bounds cost parameter
-        self.LAMBDA = LAMBDA  # the sparse prior is delta (S-DA) + LAMBDA * |A|
-
-        # EM Parameters
-        # M - Parameters (ADADELTA)
-        self.rho = 0.4
-        self.eps = 0.001
-        self.n_g_itr = 10
-        self.n_itr = n_itr
-
-        # E Parameters (Particle Filter)
-        self.n_p = 25  # Number of particles for the EM
-
-        # Initialize pixel and LGN positions
-        self.a = a  # pixel spacing
-        # Position of pixels
-        self.XS = np.arange(- self.l_i / 2, self.l_i / 2)
-        self.YS = np.arange(- self.l_i / 2, self.l_i / 2)
-        self.XS = self.XS.astype('float32')
-        self.YS = self.YS.astype('float32')
-        self.XS *= self.a
-        self.YS *= self.a
-
-        # Position of LGN receptive fields
-        self.init_rf_centers()
-
-        # Variances of Gaussians for each pixel
-        self.Var = 0.25 * np.ones((self.l_i,)).astype('float32')
-
-        # Gain factor (to be set later)
-        self.G = 1.
-
-        # X-Position of retina (batches, timesteps), batches used for inference
-        # only
-        self.XR = np.zeros((1, self.n_t)).astype('float32')
-        # Y-Position of retina
-        self.YR = np.zeros((1, self.n_t)).astype('float32')
-
-        # Spikes (1 or 0)
-        self.R = np.zeros((self.n_n, self.n_t)).astype('float32')
-
-        # Sparse Coefficients
-        self.A = np.zeros((self.n_l,)).astype('float32')
-
-        # Shapes of other variables used elsewhere
-
-        # Pixel values for generating image (same shape as estimated image)
-        #        self.s_gen = np.zeros((self.l_i, self.l_i)).astype('float32')
-        # Assumes that the first dimension is 'Y'
-        #    and the second dimension is 'X'
-
-        # Weighting for batches and time points
-        # self.Wbt = np.ones((self.n_b, self.n_t)).astype('float32')
-
-        # Dictionary going from latent factors to image
-        #       self.d = np.zeros((self.n_l, self.n_pix)).astype('float32')
-
-        self.init_theano_core()
-        self.set_gain_factor()
-
-        if actual_motion_mode == 'Diffusion':
-            self.pg = DiffusionPathGenerator(
-                self.n_t, self.l_i, self.dc, self.dt)
-        elif actual_motion_mode == 'Experiment':
-            self.pg = ExperimentalPathGenerator(
-                self.n_t, 'data/resampled_paths.mat', self.dt)
-        else:
-            raise ValueError('actual_motion_mode must'
-                             + 'be Diffusion of Experiment')
-
-        self.motion_prior = motion_prior
-        self.init_particle_filter()
-
-        if (self.save_mode):
-            self.init_output_dir()
-
-    def gen_data(self):
-        """
-        Generates a path and spikes
-        Builds a dictionary saving these data
-        """
-        # Generate Path
-        path = self.pg.gen_path()
-        self.XR[0, :] = path[0]
-        self.YR[0, :] = path[1]
-
-        self.gen_spikes()
-        self.pf.Y = self.R.transpose()  # Update reference to spikes for PF
-        # TODO: EWW
-
-        if self.save_mode:
-            self.build_param_and_data_dict()
-
-    def init_rf_centers(self):
-        """
-        Initialize the centers of the receptive fields of the neurons
-        """
-        self.n_n = 2 * self.l_n ** 2
-        self.XE, self.YE = np.meshgrid(
-            np.arange(- self.l_n / 2, self.l_n / 2),
-            np.arange(- self.l_n / 2, self.l_n / 2)
-            )
-
-        self.XE = self.XE.ravel().astype('float32')
-        self.YE = self.YE.ravel().astype('float32')
-#        self.XE *= self.a
-#        self.YE *= self.a
-
-        def double_array(m):
-            """
-            m - 1d array to be doubled
-            :rtype : array that is two copies of m concatenated
-            """
-            l = m.shape[0]
-            res = np.zeros((2 * l,))
-            res[0:l] = m
-            res[l: 2 * l] = m
-            return res
-
-        self.XE = double_array(self.XE)
-        self.YE = double_array(self.YE)
-
-        # Identity of LGN cells (ON = 0, OFF = 1)
-        self.IE = np.zeros((self.n_n,)).astype('float32')
-        self.IE[0: self.n_n / 2] = 1
-
-    def init_theano_core(self):
+class TheanoBackend(object):
+    """
+    Theano backend for executing the computations
+    """
+    def __init__(self, XS, YS, XE, YE, IE, Var, A, d):
         """
         Initializes all theano variables and functions
         """
+        self.XS = XS
+        self.YS = YS
+        self.XE = XE
+        self.YE = YE
+        self.IE = IE
+        self.Var = Var
+        self.A = A
+        self.d = d
+        self.l_i = XS.shape[0]
+
         # Define Theano Variables Common to Generation and Inference
         self.t_XS = theano.shared(self.XS, 'XS')
         self.t_YS = theano.shared(self.YS, 'YS')
@@ -280,7 +106,7 @@ class EMBurak:
 
             return t_Ips, t_PixRFCoupling
 
-        self.inner_products = inner_products
+        # self.inner_products = inner_products
 
         def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
             # Firing probabilities indexed by b, j, t
@@ -417,6 +243,215 @@ class EMBurak:
                                         outputs=energy_outputs,
                                         updates=self.grad_updates)
 
+    def get_A(self):
+        return self.t_A.get_value()
+
+    def reset_image_estimate(self):
+        """
+        Resets the value of the image as stored on the GPU
+        """
+        self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
+
+    def reset_m_aux(self):
+        """
+        Resets auxillary gradient descent variables for the M step
+            eg. for ADADelta, we reset the RMS of dx and g
+        """
+        self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
+
+
+class EMBurak(object):
+
+    def __init__(self, s_gen, d, dt=0.001, dc=100., n_t=50,
+                 l_n=14, a=1., LAMBDA=1., save_mode=False,
+                 n_itr=10, s_gen_name=' ',
+                 actual_motion_mode='Diffusion',
+                 motion_prior='PositionDiffusion'):
+        """
+        Initializes the parts of the EM algorithm
+            -- Sets all parameters
+            -- Initializes Dictionary
+            -- Compiles the theano backend
+            -- Sets the gain factor for the spikes
+            -- Initializes the object that generates the paths
+            -- Initializes the Particle Filter object
+            -- Checks that the output directory exists
+
+        ----------
+        Parameters
+        ----------
+        s_gen : array
+            image that generates the spikes - (L_I, L_I), type = float32
+        d : array
+            dictionary used to infer latent factors,
+               shape = (N_L, N_pix), type = float32
+        s_gen_name : str
+            name of image (eg. label)
+        Checks for consistency L_I ** 2 = N_pix
+
+        Note that changing certain parameters without reinitializing the class
+        may have unexpected effects (because the changes won't necessarily
+        propagate to subclasses.
+        """
+
+        self.data = {}
+        self.output_dir = os.path.join('output/', time_string())
+        self.save_mode = save_mode  # If true, save results after EM completes
+        print 'The save mode is ' + str(save_mode)
+        self.d = d.astype(theano.config.floatX)  # Dictionary
+        self.n_l, self.n_pix = d.shape
+        # n_l - number of latent factors
+        # n_pix - number of pixels in the image
+
+        self.s_gen = s_gen.astype(theano.config.floatX)
+        self.s_gen_name = s_gen_name
+        self.l_i = s_gen.shape[0]  # Linear dimension of the image
+
+        if not self.l_i ** 2 == self.n_pix:
+            raise ValueError('Mismatch between dictionary and image size')
+
+        # Simulation Parameters
+        self.dt = dt  # Simulation timestep
+        self.dc = dc  # Diffusion Constant
+        print 'The diffusion constant is ' + str(self.dc)
+        self.l0 = 10.
+        self.l1 = 100.
+
+        # Problem Dimensions
+        self.n_t = n_t  # Number of time steps
+        self.l_n = l_n  # Linear dimension of neuron receptive field grid
+
+        # Image Prior Parameters
+        self.gamma = 100.  # Pixel out of bounds cost parameter
+        self.LAMBDA = LAMBDA  # the sparse prior is delta (S-DA) + LAMBDA * |A|
+
+        # EM Parameters
+        # M - Parameters (ADADELTA)
+        self.rho = 0.4
+        self.eps = 0.001
+        self.n_g_itr = 10
+        self.n_itr = n_itr
+
+        # E Parameters (Particle Filter)
+        self.n_p = 25  # Number of particles for the EM
+
+        # Initialize pixel and LGN positions
+        self.a = a  # pixel spacing
+        # Position of pixels
+        self.XS = np.arange(- self.l_i / 2, self.l_i / 2)
+        self.YS = np.arange(- self.l_i / 2, self.l_i / 2)
+        self.XS = self.XS.astype('float32')
+        self.YS = self.YS.astype('float32')
+        self.XS *= self.a
+        self.YS *= self.a
+
+        # Position of LGN receptive fields
+        self.init_rf_centers()
+
+        # Variances of Gaussians for each pixel
+        self.Var = 0.25 * np.ones((self.l_i,)).astype('float32')
+
+        # Gain factor (to be set later)
+        self.G = 1.
+
+        # X-Position of retina (batches, timesteps), batches used for inference
+        # only
+        self.XR = np.zeros((1, self.n_t)).astype('float32')
+        # Y-Position of retina
+        self.YR = np.zeros((1, self.n_t)).astype('float32')
+
+        # Spikes (1 or 0)
+        self.R = np.zeros((self.n_n, self.n_t)).astype('float32')
+
+        # Sparse Coefficients
+        self.A = np.zeros((self.n_l,)).astype('float32')
+
+        # Shapes of other variables used elsewhere
+
+        # Pixel values for generating image (same shape as estimated image)
+        #        self.s_gen = np.zeros((self.l_i, self.l_i)).astype('float32')
+        # Assumes that the first dimension is 'Y'
+        #    and the second dimension is 'X'
+
+        # Weighting for batches and time points
+        # self.Wbt = np.ones((self.n_b, self.n_t)).astype('float32')
+
+        # Dictionary going from latent factors to image
+        #       self.d = np.zeros((self.n_l, self.n_pix)).astype('float32')
+
+        self.tc = TheanoBackend(self.XS, self.YS,
+                                self.XE, self.YE,
+                                self.IE, self.Var,
+                                self.A, self.d)
+        self.set_gain_factor()
+
+        if actual_motion_mode == 'Diffusion':
+            self.pg = DiffusionPathGenerator(
+                self.n_t, self.l_i, self.dc, self.dt)
+        elif actual_motion_mode == 'Experiment':
+            self.pg = ExperimentalPathGenerator(
+                self.n_t, 'data/resampled_paths.mat', self.dt)
+        else:
+            raise ValueError('actual_motion_mode must'
+                             + 'be Diffusion of Experiment')
+
+        self.motion_prior = motion_prior
+        self.init_particle_filter()
+
+        if (self.save_mode):
+            self.init_output_dir()
+
+    def gen_data(self):
+        """
+        Generates a path and spikes
+        Builds a dictionary saving these data
+        """
+        # Generate Path
+        path = self.pg.gen_path()
+        self.XR[0, :] = path[0]
+        self.YR[0, :] = path[1]
+
+        self.gen_spikes()
+        self.pf.Y = self.R.transpose()  # Update reference to spikes for PF
+        # TODO: EWW
+
+        if self.save_mode:
+            self.build_param_and_data_dict()
+
+    def init_rf_centers(self):
+        """
+        Initialize the centers of the receptive fields of the neurons
+        """
+        self.n_n = 2 * self.l_n ** 2
+        self.XE, self.YE = np.meshgrid(
+            np.arange(- self.l_n / 2, self.l_n / 2),
+            np.arange(- self.l_n / 2, self.l_n / 2)
+            )
+
+        self.XE = self.XE.ravel().astype('float32')
+        self.YE = self.YE.ravel().astype('float32')
+#        self.XE *= self.a
+#        self.YE *= self.a
+
+        def double_array(m):
+            """
+            m - 1d array to be doubled
+            :rtype : array that is two copies of m concatenated
+            """
+            l = m.shape[0]
+            res = np.zeros((2 * l,))
+            res[0:l] = m
+            res[l: 2 * l] = m
+            return res
+
+        self.XE = double_array(self.XE)
+        self.YE = double_array(self.YE)
+
+        # Identity of LGN cells (ON = 0, OFF = 1)
+        self.IE = np.zeros((self.n_n,)).astype('float32')
+        self.IE[0: self.n_n / 2] = 1
+
         # Prepare the hand calculation of the gradient (prep for hessian)
 
     #        t_Dp =
@@ -427,9 +462,9 @@ class EMBurak:
             results in spikes at the maximum firing rate
         """
         self.G = 1.
-        Ips, FP = self.RFS(np.ones_like(self.s_gen), self.XR, self.YR,
-                           self.l0, self.l1,
-                           self.dt, self.G)
+        Ips, FP = self.tc.RFS(
+            np.ones_like(self.s_gen), self.XR, self.YR,
+            self.l0, self.l1, self.dt, self.G)
         self.G = (1. / Ips.max()).astype('float32')
 
     def init_particle_filter(self):
@@ -447,9 +482,10 @@ class EMBurak:
             ip = pf.GaussIP(D_H, sdev * 0.001)
             tp = pf.GaussTP(D_H, sdev)
             lp = PoissonLP(self.n_n, D_H, self.l0, self.l1,
-                           self.dt, self.G, self.spike_energy)
+                           self.dt, self.G, self.tc.spike_energy)
 
         elif self.motion_prior == 'VelocityDiffusion':
+            # FIXME: save these params
             D_H = 4   # Hidden state dim, x,y,vx,vy
             v0 = 30.  # Initial Estimate for velocity
             dcv = 6.  # Velocity Diffusion Constant
@@ -483,8 +519,9 @@ class EMBurak:
         """
         Generate LGN responses given the path and the image
         """
-        self.R[:, :] = self.spikes(self.s_gen, self.XR, self.YR, self.l0,
-                                   self.l1, self.dt, self.G)[0]
+        self.R[:, :] = self.tc.spikes(
+            self.s_gen, self.XR, self.YR, self.l0,
+            self.l1, self.dt, self.G)[0]
         print 'Mean firing rate ' + str(self.R.mean() / self.dt)
 
     def true_costs(self):
@@ -498,7 +535,7 @@ class EMBurak:
                 self.l0, self.l1, self.dt, self.G,
                 self.gamma, self.LAMBDA)
 
-        out = self.costs(*args)
+        out = self.tc.costs(*args)
 
         E, E_bound, E_R, E_rec, E_sp = out
         print ('Costs of underlying data '
@@ -511,14 +548,8 @@ class EMBurak:
         self.pf.reset()
         # self.c.reset()
         self.data = {}
-        self.reset_image_estimate()
-        self.reset_m_aux()
-
-    def reset_image_estimate(self):
-        """
-        Resets the value of the image as stored on the GPU
-        """
-        self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
+        self.tc.reset_image_estimate()
+        self.tc.reset_m_aux()
 
     def run_E(self, t):
         """
@@ -537,14 +568,6 @@ class EMBurak:
 
         print 'Path SNR ' + str(SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
 
-    def reset_m_aux(self):
-        """
-        Resets auxillary gradient descent variables for the M step
-            eg. for ADADelta, we reset the RMS of dx and g
-        """
-        self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
-        self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
-
     def run_M(self, t, N_g_itr=5):
         """
         Runs the maximization step for the first t time steps
@@ -552,7 +575,7 @@ class EMBurak:
         t - number of time steps
         result is saved in t_A.get_value()
         """
-        self.reset_m_aux()
+        self.tc.reset_m_aux()
         print ('Total Energy / t | Bound. Energy / t '
                + '| Spike Energy / t | + Sparse E / t |  SNR')
         for v in range(N_g_itr):
@@ -563,8 +586,8 @@ class EMBurak:
                     self.G, self.gamma, self.LAMBDA,
                     self.rho, self.eps)
 
-            out = self.img_grad(*args)
-            self.img_SNR = SNR(self.s_gen, self.image_est())
+            out = self.tc.img_grad(*args)
+            self.img_SNR = SNR(self.s_gen, self.tc.image_est())
 
             print self.print_costs(out, t) + str(self.img_SNR)
 
@@ -589,7 +612,7 @@ class EMBurak:
         Saves summary of run info in self.data
         Note running twice will overwrite this run info
         """
-        self.reset_image_estimate()
+        self.tc.reset_image_estimate()
 
         EM_data = {}
 
@@ -608,8 +631,8 @@ class EMBurak:
 
             iteration_data = {'time_steps': t, 'path_means': self.pf.means,
                               'path_sdevs': self.pf.sdevs,
-                              'image_est': self.image_est(),
-                              'coeff_est': self.t_A.get_value()}
+                              'image_est': self.tc.image_est(),
+                              'coeff_est': self.tc.get_A()}
 
             EM_data[u] = iteration_data
 
