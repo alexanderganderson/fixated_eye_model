@@ -1,5 +1,9 @@
-from model import *
-from analyzer import *
+import sys
+sys.path.append('..')
+import numpy as np
+import matplotlib.pyplot as plt
+from src.model import EMBurak
+from src.analyzer import DataAnalyzer
 from scipy.io import loadmat
 from utils.image_gen import ImageGenerator
 
