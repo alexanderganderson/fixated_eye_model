@@ -77,7 +77,7 @@ class PathGenerator():
         return np.zeros((2, self.N_T))
 
     @abc.abstractmethod
-    def path_mode(self):
+    def mode(self):
         """
         Returns a string describing the path
         """
@@ -105,7 +105,7 @@ class DiffusionPathGenerator(PathGenerator):
             self.c.advance()
         return path
 
-    def path_mode(self):
+    def mode(self):
         return 'Diffusion'
 
 
@@ -140,7 +140,7 @@ class ExperimentalPathGenerator(PathGenerator):
         pat[1] = pat[1] - pat[1][0]
         return pat
 
-    def path_mode(self):
+    def mode(self):
         return 'Experimental_data'
 
 

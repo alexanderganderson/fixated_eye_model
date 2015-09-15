@@ -642,7 +642,7 @@ class EMBurak:
                      'N_P': self.n_p, 'XS': self.XS, 'YS': self.YS,
                      'XE': self.XE, 'YE': self.YE, 'Var': self.Var,
                      'G': self.G, 'XR': self.XR, 'YR': self.YR, 'IE': self.IE,
-                     'actual_motion_mode': self.pg.actual_motion_mode(),
+                     'actual_motion_mode': self.pg.mode(),
                      'S_gen': self.s_gen, 'S_gen_name': self.s_gen_name,
                      'R': self.R, 'motion_prior': self.motion_prior}
 
