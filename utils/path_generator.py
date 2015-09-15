@@ -1,57 +1,63 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.io import loadmat
 import abc
 
+
 class Center:
+
     def __init__(self, Lx, DC, DT):
         """
         Class that Implements a diffusing center in a box of size Lx
-        
+
         Lx = linear dimension of square to diffuse in
         DC = diffusion constant
         DT = timestep size
-        x = coordinates of the current location of the random walk, 
+        x = coordinates of the current location of the random walk,
             initialized as [0, 0]
         Initializes Center Object
         """
         self.Lx = Lx
         self.DC = DC
-        self.m0 = np.array([0, 0], dtype = 'float64') # current position
+        self.m0 = np.array([0, 0], dtype='float64')  # current position
         self.DT = DT
-        # The diffusion is biased towards the center by taking a product of gaussians
-        #   A product of gaussians is also a gaussian with mean, sdev given as (mn, sn)
-        self.m1 = np.array([0, 0], dtype = 'float64') # center of image
-        self.s0 = np.sqrt(self.DC * self.DT) # Standard deviation for diffusion
+        # The diffusion is biased towards the center by taking a product of
+        # gaussians
+        # A product of gaussians is also a gaussian with mean, sdev given as
+        # (mn, sn)
+        self.m1 = np.array([0, 0], dtype='float64')  # center of image
+        # Standard deviation for diffusion
+        self.s0 = np.sqrt(self.DC * self.DT)
         self.s1 = self.Lx / 4  # Standard Deviation for centering gaussian
         self.sn = 1 / np.sqrt(1 / self.s0 ** 2 + 1 / self.s1 ** 2)
 
-        
     def advance(self):
         """
         Updates location according to a random walk that stays within a box
         """
-        
-        self.mn = (self.m0 / self.s0 ** 2 + self.m1 / self.s1 ** 2) * self.sn ** 2
+
+        self.mn = (
+            self.m0 / self.s0 ** 2 + self.m1 / self.s1 ** 2) * self.sn ** 2
         while(True):
             # Note that for 2d diffusion, each component's variance is half the
             #   variance of the overall step length
-            temp = self.mn + np.random.normal(size = 2, scale = self.sn / np.sqrt(2))
-            if (temp[0] > - self.Lx / 2 
-                and temp[0] < self.Lx / 2 
-                and temp[1] > - self.Lx / 2 
-                and temp[1] < self.Lx / 2):
+            temp = self.mn + \
+                np.random.normal(size=2, scale=self.sn / np.sqrt(2))
+            if (temp[0] > - self.Lx / 2
+                    and temp[0] < self.Lx / 2
+                    and temp[1] > - self.Lx / 2
+                    and temp[1] < self.Lx / 2):
                 self.m0 = temp
                 break
 
     def get_center(self):
         return self.m0
-    
+
     def reset(self):
-        self.m0 = np.array([0, 0], dtype = 'float64')
-    
+        self.m0 = np.array([0, 0], dtype='float64')
+
     def __str__(self):
         return str(self.x)
+
 
 class PathGenerator():
     __metaclass__ = abc.ABCMeta
@@ -77,7 +83,9 @@ class PathGenerator():
         """
         return ' '
 
+
 class DiffusionPathGenerator(PathGenerator):
+
     def __init__(self, N_T, Lx, DC, DT):
         """
         Creates a path generator that does bounded diffusion
@@ -88,7 +96,7 @@ class DiffusionPathGenerator(PathGenerator):
         """
         PathGenerator.__init__(self, N_T)
         self.c = Center(Lx, DC, DT)
-        
+
     def gen_path(self):
         self.c.reset()
         path = np.zeros((2, self.N_T))
@@ -96,11 +104,13 @@ class DiffusionPathGenerator(PathGenerator):
             path[:, i] = self.c.get_center()
             self.c.advance()
         return path
-    
+
     def path_mode(self):
         return 'Diffusion'
 
+
 class ExperimentalPathGenerator(PathGenerator):
+
     def __init__(self, N_T, filename, DT):
         """
         Creates a path generator that uses real experimental data
@@ -117,7 +127,7 @@ class ExperimentalPathGenerator(PathGenerator):
         if not self.DT == DT:
             raise ValueError('Data timestep doesnt match simulation timestep')
         if self.N_T > self.N_T_data:
-            pass #raise ValueError('Simulation has more timesteps than data')
+            pass  # raise ValueError('Simulation has more timesteps than data')
 
     def gen_path(self):
         """
@@ -129,7 +139,7 @@ class ExperimentalPathGenerator(PathGenerator):
         pat[0] = pat[0] - pat[0][0]
         pat[1] = pat[1] - pat[1][0]
         return pat
-        
+
     def path_mode(self):
         return 'Experimental_data'
 

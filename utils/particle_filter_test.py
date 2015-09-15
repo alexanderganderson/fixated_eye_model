@@ -2,49 +2,53 @@ import unittest
 import particle_filter_new as PF
 import numpy as np
 
+
 class GaussTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 2
         self.sigmas = np.array([0.1, 0.4])
         self.N_S = 10
-        
+
     def testProb(self):
         X = np.ones((self.N_S, self.D_H))
         res = PF.gauss_pdf(X, self.sigmas)
-        
+
         self.assertEquals(res.shape, (self.N_S,))
 
+
 class InitialProposalDistributionTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 2
         self.sigmas = np.array([0.1, 0.4])
         self.D_O = 4
         self.N_S = 50
         self.pd = PF.GaussIPD(self.D_H, self.D_O, self.sigmas)
-    
+
     def testVarInit(self):
         """
         Tests if variables initialized correctly
         """
         self.assertEquals(self.pd.D_H, self.D_H)
         self.assertEquals(self.pd.D_O, self.D_O)
-        
-        
+
     def testProb(self):
         X0 = np.zeros((self.N_S, self.D_H))
         Y0 = np.zeros((self.D_O,))
-        probs = (np.ones(self.N_S) / 
+        probs = (np.ones(self.N_S) /
                  np.prod(np.sqrt(2 * np.pi * self.sigmas ** 2)))
-        self.failUnlessAlmostEqual(self.pd.prob(X0, Y0)[0], 
-                                   probs[0], places = 4)
-        
+        self.failUnlessAlmostEqual(self.pd.prob(X0, Y0)[0],
+                                   probs[0], places=4)
+
     def testSample(self):
         Y0 = np.ones((self.D_O,))
         m = np.mean(self.pd.sample(Y0, self.N_S))
-        self.failUnlessAlmostEqual(m, 0., places = 1)
-        
+        self.failUnlessAlmostEqual(m, 0., places=1)
+
 
 class TransitionProposalDistributionTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 2
         self.D_O = self.D_H
@@ -64,7 +68,7 @@ class TransitionProposalDistributionTest(unittest.TestCase):
         Yc = np.zeros((self.D_O,))
         Xp = np.zeros((self.N_S, self.D_H))
         Xp[:, 0] = 1.
-        expt = (np.ones((self.N_S,)) / 
+        expt = (np.ones((self.N_S,)) /
                 np.prod(np.sqrt(2 * np.pi * self.sigmas ** 2)))
         self.failUnlessAlmostEqual(expt[0], self.tpd.prob(Xc, Yc, Xp)[0])
 
@@ -72,11 +76,12 @@ class TransitionProposalDistributionTest(unittest.TestCase):
         Xp = np.zeros((self.N_S, self.D_H))
         Xp[:, 0] = 1
         Yc = np.zeros((self.D_O,))
-        m = np.mean(self.tpd.sample(Yc, Xp), axis = 0)
-        self.failUnlessAlmostEqual(0, m[0], places = 1)
-        
+        m = np.mean(self.tpd.sample(Yc, Xp), axis=0)
+        self.failUnlessAlmostEqual(0, m[0], places=1)
+
 
 class InitialPotentialTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 4
         self.N_S = 1
@@ -90,9 +95,11 @@ class InitialPotentialTest(unittest.TestCase):
     def testProb(self):
         X0 = np.zeros((self.N_S, self.D_H))
         ans = np.prod(1. / np.sqrt(2 * np.pi * self.sigmas ** 2))
-        self.failUnlessAlmostEqual(ans, self.ip.prob(X0)[0], places = 3)
+        self.failUnlessAlmostEqual(ans, self.ip.prob(X0)[0], places=3)
+
 
 class TransitionPotentialTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 2
         self.N_S = 10
@@ -110,10 +117,12 @@ class TransitionPotentialTest(unittest.TestCase):
         Xp[:, 0] = 1.
         Xc = np.zeros((self.N_S, self.D_H))
         ans = np.prod(1. / np.sqrt(2 * np.pi * self.sigmas ** 2))
-        self.failUnlessAlmostEqual(ans, 
-                                   self.tp.prob(Xc, Xp)[0], places = 3)
+        self.failUnlessAlmostEqual(ans,
+                                   self.tp.prob(Xc, Xp)[0], places=3)
+
 
 class LikelihoodPotentialTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 3
         self.D_O = self.D_H
@@ -131,9 +140,11 @@ class LikelihoodPotentialTest(unittest.TestCase):
         Xc = np.zeros((self.N_S, self.D_H))
         ans = self.lp.prob(Yc, Xc)
         ans1 = np.prod(1. / np.sqrt(2 * np.pi * self.sigmas ** 2))
-        self.failUnlessAlmostEqual(ans[0], ans1, places = 3)
+        self.failUnlessAlmostEqual(ans[0], ans1, places=3)
+
 
 class ParticleFilterTest(unittest.TestCase):
+
     def setUp(self):
         self.D_H = 3
         self.D_O = self.D_H
@@ -147,16 +158,16 @@ class ParticleFilterTest(unittest.TestCase):
         self.ip = PF.GaussIP(self.D_H, self.sigma_trans)
         self.tp = PF.GaussTP(self.D_H, self.sigma_trans)
         self.lp = PF.GaussLP(self.D_H, self.D_O, self.sigma_obs)
-        
-        # Generate some data according to this model            
+
+        # Generate some data according to this model
         self.X = np.zeros((self.N_T, self.D_H))
         self.Y = np.zeros((self.N_T, self.D_H))
         for i in range(self.D_H):
-            self.X[:, i] = np.cumsum(self.sigma_trans[i] * 
-                                np.random.randn(self.N_T))
+            self.X[:, i] = np.cumsum(self.sigma_trans[i] *
+                                     np.random.randn(self.N_T))
         self.Y = np.random.randn(self.N_T, self.D_H) * self.sigma_obs + self.X
 
-        self.pf = PF.ParticleFilter(self.ipd, self.tpd, self.ip, 
+        self.pf = PF.ParticleFilter(self.ipd, self.tpd, self.ip,
                                     self.tp, self.lp, self.Y, self.N_P)
 
     def testInit(self):
@@ -193,7 +204,7 @@ class ParticleFilterTest(unittest.TestCase):
         self.assertTrue(err < self.sigma_obs[0])
 
     def testPlot(self):
-        self.pf.plot(self.X, 0.001, show = False)
+        self.pf.plot(self.X, 0.001, show=False)
 
     def testMain(self):
         PF.main()

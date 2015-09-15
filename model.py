@@ -6,7 +6,8 @@ import numpy as np
 import theano
 import theano.tensor as T
 import os
-from utils.path_generator import DiffusionPathGenerator, ExperimentalPathGenerator
+from utils.path_generator import (DiffusionPathGenerator,
+                                  ExperimentalPathGenerator)
 import utils.particle_filter_new as pf
 from utils.theano_gradient_routines import ada_delta
 from utils.SNR import SNR
@@ -16,11 +17,12 @@ from utils.BurakPoissonLP import PoissonLP
 
 
 class EMBurak:
+
     def __init__(self, s_gen, d, dt=0.001, dc=100., n_t=50,
                  l_n=14, a=1., LAMBDA=1., save_mode=False,
                  n_itr=10, s_gen_name=' ',
-                 path_mode = 'Diffusion',
-                 motion_prior = 'PositionDiffusion'):
+                 actual_motion_mode='Diffusion',
+                 motion_prior='PositionDiffusion'):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -31,27 +33,33 @@ class EMBurak:
             -- Initializes the Particle Filter object
             -- Checks that the output directory exists
 
-        s_gen - image that generates the spikes - (L_I, L_I), type = float32
-        d - dictionary used to infer latent factors,
+        ----------
+        Parameters
+        ----------
+        s_gen : array
+            image that generates the spikes - (L_I, L_I), type = float32
+        d : array
+            dictionary used to infer latent factors,
                shape = (N_L, N_pix), type = float32
-        S_gen_name - name of image (eg. label)
+        s_gen_name : str
+            name of image (eg. label)
         Checks for consistency L_I ** 2 = N_pix
 
         Note that changing certain parameters without reinitializing the class
         may have unexpected effects (because the changes won't necessarily
-        propagate to subclasses. 
+        propagate to subclasses.
         """
 
         self.data = {}
-        self.output_dir = 'output/' + time_string()
+        self.output_dir = os.path.join('output/', time_string())
         self.save_mode = save_mode  # If true, save results after EM completes
         print 'The save mode is ' + str(save_mode)
-        self.d = d.astype('float32')  # Dictionary
+        self.d = d.astype(theano.config.floatX)  # Dictionary
         self.n_l, self.n_pix = d.shape
         # n_l - number of latent factors
         # n_pix - number of pixels in the image
 
-        self.s_gen = s_gen.astype('float32')
+        self.s_gen = s_gen.astype(theano.config.floatX)
         self.s_gen_name = s_gen_name
         self.l_i = s_gen.shape[0]  # Linear dimension of the image
 
@@ -68,8 +76,6 @@ class EMBurak:
         # Problem Dimensions
         self.n_t = n_t  # Number of time steps
         self.l_n = l_n  # Linear dimension of neuron receptive field grid
-                #       self.N_L Number of latent sparse factors
-        #       self.L_I Linear dimension of image
 
         # Image Prior Parameters
         self.gamma = 100.  # Pixel out of bounds cost parameter
@@ -96,42 +102,16 @@ class EMBurak:
         self.YS *= self.a
 
         # Position of LGN receptive fields
-
-
-        self.n_n = 2 * self.l_n ** 2
-        self.XE, self.YE = np.meshgrid(np.arange(- self.l_n / 2, self.l_n / 2),
-                                       np.arange(- self.l_n / 2, self.l_n / 2))
-
-        self.XE = self.XE.ravel().astype('float32')
-        self.YE = self.YE.ravel().astype('float32')
-#        self.XE *= self.a
-#        self.YE *= self.a
-
-        def double_array(m):
-            """
-            m - 1d array to be doubled
-            :rtype : array that is two copies of m concatenated
-            """
-            l = m.shape[0]
-            res = np.zeros((2 * l,))
-            res[0:l] = m
-            res[l: 2*l] = m
-            return res
-
-        self.XE = double_array(self.XE)
-        self.YE = double_array(self.YE)
-
-        # Identity of LGN cells (ON = 0, OFF = 1)
-        #self.IE = np.random.randint(2, size=(self.n_n,)).astype('float32')
-        self.IE = np.zeros((self.n_n,)).astype('float32')
-        self.IE[0: self.n_n / 2] = 1
+        self.init_rf_centers()
 
         # Variances of Gaussians for each pixel
         self.Var = 0.25 * np.ones((self.l_i,)).astype('float32')
+
         # Gain factor (to be set later)
         self.G = 1.
 
-        # X-Position of retina (batches, timesteps), batches used for inference only
+        # X-Position of retina (batches, timesteps), batches used for inference
+        # only
         self.XR = np.zeros((1, self.n_t)).astype('float32')
         # Y-Position of retina
         self.YR = np.zeros((1, self.n_t)).astype('float32')
@@ -145,25 +125,28 @@ class EMBurak:
         # Shapes of other variables used elsewhere
 
         # Pixel values for generating image (same shape as estimated image)
-        #        self.s_gen = np.zeros((self.L_I, self.L_I)).astype('float32')
-        # Assumes that the first dimension is 'Y' 
+        #        self.s_gen = np.zeros((self.l_i, self.l_i)).astype('float32')
+        # Assumes that the first dimension is 'Y'
         #    and the second dimension is 'X'
 
         # Weighting for batches and time points
-        # self.Wbt = np.ones((self.N_B, self.N_T)).astype('float32')
+        # self.Wbt = np.ones((self.n_b, self.n_t)).astype('float32')
 
         # Dictionary going from latent factors to image
-        #       self.d = np.zeros((self.N_L, self.N_Pix)).astype('float32')
+        #       self.d = np.zeros((self.n_l, self.n_pix)).astype('float32')
 
         self.init_theano_core()
         self.set_gain_factor()
 
-        if path_mode == 'Diffusion':
-            self.pg = DiffusionPathGenerator(self.n_t, self.l_i, self.dc, self.dt)
-        elif path_mode == 'Experiment':
-            self.pg = ExperimentalPathGenerator(self.n_t, 'data/resampled_paths.mat', self.dt)
+        if actual_motion_mode == 'Diffusion':
+            self.pg = DiffusionPathGenerator(
+                self.n_t, self.l_i, self.dc, self.dt)
+        elif actual_motion_mode == 'Experiment':
+            self.pg = ExperimentalPathGenerator(
+                self.n_t, 'data/resampled_paths.mat', self.dt)
         else:
-            raise ValueError('path_mode must be Diffusion of Experiment')
+            raise ValueError('actual_motion_mode must'
+                             + 'be Diffusion of Experiment')
 
         self.motion_prior = motion_prior
         self.init_particle_filter()
@@ -187,6 +170,39 @@ class EMBurak:
 
         if self.save_mode:
             self.build_param_and_data_dict()
+
+    def init_rf_centers(self):
+        """
+        Initialize the centers of the receptive fields of the neurons
+        """
+        self.n_n = 2 * self.l_n ** 2
+        self.XE, self.YE = np.meshgrid(
+            np.arange(- self.l_n / 2, self.l_n / 2),
+            np.arange(- self.l_n / 2, self.l_n / 2)
+            )
+
+        self.XE = self.XE.ravel().astype('float32')
+        self.YE = self.YE.ravel().astype('float32')
+#        self.XE *= self.a
+#        self.YE *= self.a
+
+        def double_array(m):
+            """
+            m - 1d array to be doubled
+            :rtype : array that is two copies of m concatenated
+            """
+            l = m.shape[0]
+            res = np.zeros((2 * l,))
+            res[0:l] = m
+            res[l: 2 * l] = m
+            return res
+
+        self.XE = double_array(self.XE)
+        self.YE = double_array(self.YE)
+
+        # Identity of LGN cells (ON = 0, OFF = 1)
+        self.IE = np.zeros((self.n_n,)).astype('float32')
+        self.IE[0: self.n_n / 2] = 1
 
     def init_theano_core(self):
         """
@@ -251,7 +267,8 @@ class EMBurak:
             # indices: b, j, t
             # Sum_i2 T(i2, i1) * T(b, i2, j, t) = T(b, i1, j, t)
             t_IpsY = T.sum(t_S.dimshuffle('x', 0, 1, 'x', 'x') *
-                           t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3), axis=1)
+                           t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3),
+                           axis=1)
             # Sum_i1 T(b, i1, j, t) * T(b, i2, j, t) = T(b, j, t)
             t_Ips = T.sum(t_IpsY * t_PixRFCouplingX, axis=1)
             t_Ips.name = 'Ips'
@@ -293,7 +310,8 @@ class EMBurak:
         self.t_FP_gen = firing_prob(self.t_Ips_gen, self.t_G, self.t_IE,
                                     self.t_L0, self.t_L1, self.t_DT)
 
-        # Computes image-RF inner products and the resulting firing probabilities
+        # Computes image-RF inner products and the resulting firing
+        # probabilities
         self.RFS = theano.function(inputs=[self.t_S_gen, self.t_XR, self.t_YR,
                                            self.t_L0, self.t_L1,
                                            self.t_DT, self.t_G],
@@ -302,7 +320,8 @@ class EMBurak:
         self.t_R_gen = (self.rng.uniform(size=self.t_FP_gen.shape)
                         < self.t_FP_gen).astype('float32')
 
-        self.spikes = theano.function(inputs=[self.t_S_gen, self.t_XR, self.t_YR,
+        self.spikes = theano.function(inputs=[self.t_S_gen,
+                                              self.t_XR, self.t_YR,
                                               self.t_L0, self.t_L1,
                                               self.t_DT, self.t_G],
                                       outputs=self.t_R_gen)
@@ -311,13 +330,14 @@ class EMBurak:
 
         def spiking_cost(t_R, t_FP):
             """
-            Returns the negative log likelihood of the spikes given the inner products
+            Returns the negative log likelihood of the spikes given
+            the inner products
             t_R - spikes in form j, t
             t_FP - Firing probabilities in form b, j, t
             Returns -log p(R|X,S) with indices in the form b, j, t
             """
             #            t_E_R_f = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP)
-            #                     + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
+            #         + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
             #         Try using poisson loss instead of bernoulli loss
             t_E_R_f = -t_R.dimshuffle('x', 0, 1) * T.log(t_FP) + t_FP
 
@@ -345,7 +365,8 @@ class EMBurak:
                                 self.t_L0, self.t_L1, self.t_DT)
 
         # Compute Energy Functions (negative log-likelihood) to minimize
-        self.t_Wbt = T.matrix('Wbt')  # Weights (batch, timestep) from particle filter
+        # Weights (batch, timestep) from particle filter
+        self.t_Wbt = T.matrix('Wbt')
         self.t_E_R_f = spiking_cost(self.t_R, self.t_FP)
 
         self.t_E_R = T.sum(T.sum(self.t_E_R_f, axis=1) * self.t_Wbt)
@@ -362,7 +383,8 @@ class EMBurak:
         self.t_E = self.t_E_R + self.t_E_bound + self.t_E_sp
         self.t_E.name = 'E'
 
-        # Cost from poisson terms separated by batches for particle filter log probability
+        # Cost from poisson terms separated by batches for particle filter log
+        # probability
         self.t_E_R_b = T.sum(self.t_E_R_f, axis=(1, 2))
         self.spike_energy = theano.function(inputs=[self.t_XR, self.t_YR,
                                                     self.t_R,
@@ -370,13 +392,14 @@ class EMBurak:
                                                     self.t_DT, self.t_G],
                                             outputs=self.t_E_R_b)
 
-        # Generate costs given a path, spikes, and time-batch weights        
+        # Generate costs given a path, spikes, and time-batch weights
         energy_outputs = [self.t_E, self.t_E_bound, self.t_E_R, self.t_E_sp]
-        self.costs = theano.function(inputs=[self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
-                                             self.t_L0, self.t_L1, self.t_DT, self.t_G,
-                                             self.t_GAMMA, self.t_LAMBDA],
-                                     outputs=energy_outputs)
-
+        self.costs = theano.function(
+            inputs=[
+                self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
+                self.t_L0, self.t_L1, self.t_DT, self.t_G,
+                self.t_GAMMA, self.t_LAMBDA],
+            outputs=energy_outputs)
 
         # Define theano variables for gradient descent
         self.t_Rho = T.scalar('Rho')
@@ -393,8 +416,6 @@ class EMBurak:
         self.img_grad = theano.function(inputs=inputs,
                                         outputs=energy_outputs,
                                         updates=self.grad_updates)
-
-
 
         # Prepare the hand calculation of the gradient (prep for hessian)
 
@@ -429,14 +450,14 @@ class EMBurak:
                            self.dt, self.G, self.spike_energy)
 
         elif self.motion_prior == 'VelocityDiffusion':
-            D_H = 4
-            v0 = 30. # Initial Estimate for velocity
-            dcv = 6. # Velocity Diffusion Constant
+            D_H = 4   # Hidden state dim, x,y,vx,vy
+            v0 = 30.  # Initial Estimate for velocity
+            dcv = 6.  # Velocity Diffusion Constant
             st = np.sqrt(dcv * self.dt)
 
-            eps = 0.00001 # Small number since cannot have exact zero
-            sigma0 = np.array([eps, eps, v0, v0]) # Initial sigmas
-            sigma_t = np.array([eps, eps, st, st]) # Transition sigmas
+            eps = 0.00001  # Small number since cannot have exact zero
+            sigma0 = np.array([eps, eps, v0, v0])  # Initial sigmas
+            sigma_t = np.array([eps, eps, st, st])  # Transition sigmas
 
             # Transition matrix
             A = np.array([[1, 0, self.dt, 0],
@@ -445,14 +466,15 @@ class EMBurak:
                           [0, 0, 0, 1]])
 
             ipd = pf.GaussIPD(D_H, self.n_n, sigma0)
-            tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A = A)
+            tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A=A)
             ip = pf.GaussIP(D_H, sigma0)
-            tp = pf.GaussTP(D_H, sigma_t, A = A)
+            tp = pf.GaussTP(D_H, sigma_t, A=A)
             lp = PoissonLP(self.n_n, D_H, self.l0, self.l1,
                            self.dt, self.G, self.spike_energy)
 
         else:
-            raise ValueError('Unrecognized Motion Prior ' + str(self.motion_prior))
+            raise ValueError(
+                'Unrecognized Motion Prior ' + str(self.motion_prior))
 
         self.pf = pf.ParticleFilter(ipd, tpd, ip, tp, lp,
                                     self.R.transpose(), self.n_p)
@@ -479,14 +501,15 @@ class EMBurak:
         out = self.costs(*args)
 
         E, E_bound, E_R, E_rec, E_sp = out
-        print 'Costs of underlying data ' + str((E / self.n_t, E_rec / self.n_t))
+        print ('Costs of underlying data '
+               + str((E / self.n_t, E_rec / self.n_t)))
 
     def reset(self):
         """
         Resets the class between EM runs
         """
         self.pf.reset()
-        self.c.reset()
+        # self.c.reset()
         self.data = {}
         self.reset_image_estimate()
         self.reset_m_aux()
@@ -506,7 +529,8 @@ class EMBurak:
         if t > self.n_t:
             raise IndexError('Maximum simulated timesteps exceeded in E step')
         if self.pf.t >= t:
-            raise IndexError('Particle filter already run past given time point')
+            raise IndexError(
+                'Particle filter already run past given time point')
         while self.pf.t < t:
             self.pf.advance()
         self.pf.calculate_means_sdevs()
@@ -529,7 +553,8 @@ class EMBurak:
         result is saved in t_A.get_value()
         """
         self.reset_m_aux()
-        print 'Total Energy / t | Bound. Energy / t | Spike Energy / t | + Sparse E / t |  SNR'
+        print ('Total Energy / t | Bound. Energy / t '
+               + '| Spike Energy / t | + Sparse E / t |  SNR')
         for v in range(N_g_itr):
             args = (self.pf.XS[0:t, :, 0].transpose(),
                     self.pf.XS[0:t, :, 1].transpose(),
@@ -561,7 +586,7 @@ class EMBurak:
         Runs full expectation maximization algorithm
         self.N_itr - number of iterations of EM
         self.N_g_itr - number of gradient steps in M step
-        Saves summary of run info in self.data 
+        Saves summary of run info in self.data
         Note running twice will overwrite this run info
         """
         self.reset_image_estimate()
@@ -581,8 +606,10 @@ class EMBurak:
             # Run M step
             self.run_M(t, N_g_itr=self.n_g_itr)
 
-            iteration_data = {'time_steps': t, 'path_means': self.pf.means, 'path_sdevs': self.pf.sdevs,
-                              'image_est': self.image_est(), 'coeff_est': self.t_A.get_value()}
+            iteration_data = {'time_steps': t, 'path_means': self.pf.means,
+                              'path_sdevs': self.pf.sdevs,
+                              'image_est': self.image_est(),
+                              'coeff_est': self.t_A.get_value()}
 
             EM_data[u] = iteration_data
 
@@ -591,7 +618,7 @@ class EMBurak:
 
     def init_output_dir(self):
         """
-        Create an output directory 
+        Create an output directory
         """
         if not os.path.exists('output'):
             os.mkdir('output')
@@ -601,16 +628,23 @@ class EMBurak:
 
     def build_param_and_data_dict(self):
         """
-        Creates a dictionary, self.data, that has all of the parameters of the model
+        Creates a dictionary, self.data, that has all of the parameters
+            of the model
         """
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
-        self.data = {'DT': self.dt, 'DC': self.dc, 'L0': self.l0, 'L1': self.l1, 'GAMMA': self.gamma,
-                     'LAMBDA': self.LAMBDA, 'D': self.d, 'N_L': self.n_l, 'a': self.a, 'N_T': self.n_t, 'L_I': self.l_i,
-                     'L_N': self.l_n, 'Rho': self.rho, 'Eps': self.eps, 'N_g_itr': self.n_g_itr, 'N_itr': self.n_itr,
-                     'N_P': self.n_p, 'XS': self.XS, 'YS': self.YS, 'XE': self.XE, 'YE': self.YE, 'Var': self.Var,
-                     'G': self.G, 'XR': self.XR, 'YR': self.YR, 'IE': self.IE, 'path_mode': self.pg.path_mode(),
-                     'S_gen': self.s_gen, 'S_gen_name': self.s_gen_name, 'R': self.R, 'motion_prior': self.motion_prior}
+        self.data = {'DT': self.dt, 'DC': self.dc, 'L0': self.l0,
+                     'L1': self.l1, 'GAMMA': self.gamma,
+                     'LAMBDA': self.LAMBDA, 'D': self.d, 'N_L': self.n_l,
+                     'a': self.a, 'N_T': self.n_t, 'L_I': self.l_i,
+                     'L_N': self.l_n, 'Rho': self.rho, 'Eps': self.eps,
+                     'N_g_itr': self.n_g_itr, 'N_itr': self.n_itr,
+                     'N_P': self.n_p, 'XS': self.XS, 'YS': self.YS,
+                     'XE': self.XE, 'YE': self.YE, 'Var': self.Var,
+                     'G': self.G, 'XR': self.XR, 'YR': self.YR, 'IE': self.IE,
+                     'actual_motion_mode': self.pg.actual_motion_mode(),
+                     'S_gen': self.s_gen, 'S_gen_name': self.s_gen_name,
+                     'R': self.R, 'motion_prior': self.motion_prior}
 
     def save(self):
         """
@@ -622,7 +656,8 @@ class EMBurak:
         if not self.save_mode:
             raise RuntimeError('Need to enable save mode to save')
 
-        fn = self.output_dir + '/data_' + time_string() + '.pkl'
+        fn = os.path.join(self.output_dir,
+                          'data_' + time_string() + '.pkl')
         pkl.dump(self.data, open(fn, 'wb'))
         return fn
 
@@ -652,6 +687,6 @@ class EMBurak:
 #        """
 #        Calculates the inner products used
 #        """
-#        self.Ips, self.FP = self.RFS(self.XR, self.YR, 
-#                                     self.L0, self.L1, 
+#        self.Ips, self.FP = self.RFS(self.XR, self.YR,
+#                                     self.L0, self.L1,
 #                                     self.DT, self.G)
