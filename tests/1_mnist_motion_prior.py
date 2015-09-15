@@ -1,5 +1,9 @@
-from model import *
-from analyzer import *
+import sys
+sys.path.append('..')
+import numpy as np
+import matplotlib.pyplot as plt
+from model import EMBurak
+from analyzer import DataAnalyzer
 from scipy.io import loadmat
 from utils.image_gen import ImageGenerator
 
@@ -23,10 +27,10 @@ ig.normalize()
 S_gen = ig.img
 S_gen_name = ig.img_name
 
-emb = EMBurak(S_gen, D, n_t=30, save_mode=True, 
-              s_gen_name=S_gen_name, n_itr = 3,
-              path_mode = 'Experiment', 
-              motion_prior = 'VelocityDiffusion')
+emb = EMBurak(S_gen, D, n_t=30, save_mode=True,
+              s_gen_name=S_gen_name, n_itr=3,
+              path_mode='Experiment',
+              motion_prior='VelocityDiffusion')
 
 emb.gen_data()
 emb.run_EM()
