@@ -15,8 +15,12 @@ Choose the correct parameters in the first box after the package loading
 and run the rest of the script.
 
 Notes: 
+
 -- Put your dataset in a .mat file, to be loaded. See prep_mnist.py for
 how to save in a matfile using scipy.io.savemat. 
+
 -- Change the pos_only flag to False (usual application)
--- Set parameters: number of batches, sparse penalty strength (eg. lambda in (I-DA) + lambda |A|), batch size, etc
+
+-- Set parameters: number of dictionary elements, sparse penalty strength (eg. lambda in (I-DA) + lambda |A|), batch size, etc
+
 -- To print costs, set the flag show_costs=True when running func:`train`
