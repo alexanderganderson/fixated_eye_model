@@ -17,7 +17,8 @@ and run the rest of the script.
 Notes: 
 
 -- Put your dataset in a .mat file, to be loaded. See prep_mnist.py for
-how to save in a matfile using scipy.io.savemat. 
+how to save in a matfile using scipy.io.savemat. The program expects an array
+of dimension (N_examples, Image_width, Image_width)
 
 -- Change the pos_only flag to False (usual application)
 
