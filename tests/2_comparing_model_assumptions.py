@@ -6,6 +6,9 @@ and to then compare the results
 import numpy as np
 from scipy.io import loadmat
 
+import sys
+sys.path.append('..')
+
 from src.model import EMBurak
 from utils.image_gen import ImageGenerator
 
