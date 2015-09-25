@@ -5,7 +5,8 @@ import os
 from scipy.ndimage.filters import gaussian_filter
 import matplotlib.pyplot as plt
 
-def inner_product(p1, l1x, l1y, 
+
+def inner_product(p1, l1x, l1y,
                   p2, l2x, l2y, var):
     """
     Calculate the inner product between two images with the representation:
@@ -21,8 +22,8 @@ def inner_product(p1, l1x, l1y,
     l1y = l1y.reshape(N, 1)
     l2y = l2y.reshape(1, N)
 
-    coupling = np.exp(-( (l1x - l2x) ** 2 + 
-                         (l1y - l2y) ** 2) / (4 * var))
+    coupling = np.exp(-((l1x - l2x) ** 2 +
+                        (l1y - l2y) ** 2) / (4 * var))
 
     return np.einsum('i,j,ij->', p1, p2, coupling)
 
@@ -32,24 +33,24 @@ def SNR(p1, l1x, l1y, p2, l2x, l2y, var):
     Using the inner product defined above, calculates the SNR
         between two images given in sum of gaussian form
     See inner product for definitinos of variables
-    Note the first set of pixels and pixel locations is 
+    Note the first set of pixels and pixel locations is
         considered to be the ground truth
     """
-    ip12 = inner_product(p1, l1x, l1y, p2, l2x, l2y, var)            
+    ip12 = inner_product(p1, l1x, l1y, p2, l2x, l2y, var)
     ip11 = inner_product(p1, l1x, l1y, p1, l1x, l1y, var)
     ip22 = inner_product(p2, l2x, l2y, p2, l2x, l2y, var)
 
     return ip11 / (ip11 + ip22 - 2 * ip12)
 
 
-
 class DataAnalyzer:
+
     def __init__(self, data):
         """
         data - dictionary containing information about run
         Loads in data from file and saves parameters in class
         """
-        
+
         self.data = data
 
         self.DT = self.data['DT']
@@ -58,9 +59,13 @@ class DataAnalyzer:
         self.XR = self.data['XR'][0]
         self.YR = self.data['YR'][0]
         self.S_gen = self.data['S_gen']
-        self.N_itr = self.data['N_itr']
         self.Var = self.data['Var'][0]
-        self.DC = self.data['DC']
+
+        self.blur_sdev = float(np.sqrt(self.Var))
+
+        self.N_itr = self.data['N_itr']
+        self.DC_gen = self.data['DC_gen']
+        self.DC_infer = self.data['DC_infer']
         self.L_I = self.data['L_I']
         self.LAMBDA = self.data['LAMBDA']
         self.R = self.data['R']
@@ -77,7 +82,7 @@ class DataAnalyzer:
         self.N_itr = self.data['N_itr']
         self.var = self.data['Var'][0]
 
-    @classmethod    
+    @classmethod
     def fromfilename(cls, filename):
         """
         filename - filename containing data file from EM run
@@ -89,7 +94,7 @@ class DataAnalyzer:
 
     def SNR_idx(self, q):
         """
-        Calculates the SNR between the ground truth and the 
+        Calculates the SNR between the ground truth and the
             image produced after iteration q of the EM
         Note that we shift the image estimate by the average
             amount that the path estimate was off the true path
@@ -103,15 +108,14 @@ class DataAnalyzer:
         XR_est = XYR_est[:, 0]
         YR_est = XYR_est[:, 1]
 
-
         dx = np.mean(self.XR[0:t] - XR_est[0:t])
         dy = np.mean(self.YR[0:t] - YR_est[0:t])
-        
+
         self.dx = dx
         self.dy = dy
 
-        return SNR(self.S_gen.ravel(), self.XS, self.YS, 
-                   S_est.ravel(), self.XS + dx, self.YS + dy, 
+        return SNR(self.S_gen.ravel(), self.XS, self.YS,
+                   S_est.ravel(), self.XS + dx, self.YS + dy,
                    self.var)
 
     def SNR_list(self):
@@ -119,7 +123,6 @@ class DataAnalyzer:
         Returns a list giving the SNR after each iteration
         """
         return [self.SNR_idx(q) for q in range(self.N_itr)]
-
 
     def time_list(self):
         """
@@ -134,7 +137,7 @@ class DataAnalyzer:
         """
         est_mean = self.data['EM_data'][q]['path_means']
         est_sdev = self.data['EM_data'][q]['path_sdevs']
-        
+
         if (d == 0):
             path = self.XR
             label = 'Hor.'
@@ -145,20 +148,20 @@ class DataAnalyzer:
             dxy = self.dy
         else:
             raise ValueError('d must be either 0 or 1')
-        
+
         t = self.data['EM_data'][q]['time_steps']
 
-        plt.fill_between(self.DT * np.arange(self.N_T), 
-                         est_mean[:, d] - est_sdev[:, d], 
-                         est_mean[:, d] + est_sdev[:, d], 
-                         alpha = 0.5, linewidth = 1.)
-        plt.plot(self.DT * np.arange(self.N_T), 
-                 est_mean[:, d], label = 'estimate')
-        plt.plot(self.DT * np.arange(self.N_T), 
-                 path, label = 'actual')
+        plt.fill_between(self.DT * np.arange(self.N_T),
+                         est_mean[:, d] - est_sdev[:, d],
+                         est_mean[:, d] + est_sdev[:, d],
+                         alpha=0.5, linewidth=1.)
+        plt.plot(self.DT * np.arange(self.N_T),
+                 est_mean[:, d], label='estimate')
+        plt.plot(self.DT * np.arange(self.N_T),
+                 path, label='actual')
         plt.xlabel('Time (s)')
         plt.ylabel('Relative position (pixels)')
-        #plt.legend()
+        # plt.legend()
         plt.title(label + ' Pos., shift = %.2f' % dxy)
 
     def plot_velocity_estimate(self, q, d):
@@ -172,31 +175,31 @@ class DataAnalyzer:
 
         est_mean = self.data['EM_data'][q]['path_means']
         est_sdev = self.data['EM_data'][q]['path_sdevs']
-        
+
         if (d == 0):
             label = 'Hor.'
         elif (d == 1):
             label = 'Ver.'
         else:
             raise ValueError('d must be either 0 or 1')
-        
+
         t = self.data['EM_data'][q]['time_steps']
 
-        d = d + 2 # Correct index for est_mean
+        d = d + 2  # Correct index for est_mean
 
-        plt.fill_between(self.DT * np.arange(self.N_T), 
-                         est_mean[:, d] - est_sdev[:, d], 
-                         est_mean[:, d] + est_sdev[:, d], 
-                         alpha = 0.5, linewidth = 1.)
-        plt.plot(self.DT * np.arange(self.N_T), 
-                 est_mean[:, d], label = 'estimate')
+        plt.fill_between(self.DT * np.arange(self.N_T),
+                         est_mean[:, d] - est_sdev[:, d],
+                         est_mean[:, d] + est_sdev[:, d],
+                         alpha=0.5, linewidth=1.)
+        plt.plot(self.DT * np.arange(self.N_T),
+                 est_mean[:, d], label='estimate')
         plt.xlabel('Time (s)')
         plt.ylabel('Velocity (pixels/sec)')
-        #plt.legend()
+        # plt.legend()
 
     def plot_dynamic_vars(self, q):
         """
-        Plots all of the dynamic variables (x, y, vx, vy) 
+        Plots all of the dynamic variables (x, y, vx, vy)
         as estimated after iteration q
         """
         if not self.data['motion_prior'] == 'VelocityDiffusion':
@@ -214,59 +217,52 @@ class DataAnalyzer:
         plt.subplot(2, 2, 4)
         self.plot_velocity_estimate(q, 1)
 
-
     def plot_EM_estimate(self, q):
         """
-        Creates a full plot of the estimated image, actual image, 
+        Creates a full plot of the estimated image, actual image,
             estimate and actual paths
-        
+
         q - index of EM iteration to plot
         """
-        
+
 #        if (q >= self.N_itr):
 #            raise ValueError('Iteration index, q, is too large')
-        
+
         m1 = np.min(self.S_gen)
         m2 = np.max(self.S_gen)
-    
+
         vmin = -0.1 * (m2 - m1) + m1
         vmax = m2 + 0.1 * (m2 - m1)
-    
-        sdev = float(np.sqrt(self.Var))    
-        n_time_steps = self.data['EM_data'][q]['time_steps']
-        t_ms = self.DT * n_time_steps  * 1000.
 
-        fig = plt.figure(figsize = (10, 8))
-        fig.suptitle('EM Reconstruction after t = %0.2f ms for D = %0.2f, LAMBDA = %0.2f' % (t_ms, self.DC, self.LAMBDA))
-        
-        # Note actual image is convolved with a gaussian during the simulation 
+        n_time_steps = self.data['EM_data'][q]['time_steps']
+        t_ms = self.DT * n_time_steps * 1000.
+
+        fig = plt.figure(figsize=(12, 8))
+        fig.suptitle('EM Reconstruction after t = %0.2f ms for DC_gen = %0.2f, LAMBDA = %0.2f' % (
+            t_ms, self.DC_gen, self.LAMBDA))
+
+        # Note actual image is convolved with a gaussian during the simulation
         #   even though the image saved has not has this happen yet
 
-
         plt.subplot(2, 3, 2)
-        self.plot_spikes(n_time_steps - 1, moving_average = True, mode = 'ON')
-        
+        self.plot_spikes(n_time_steps - 1, moving_average=True, mode='ON')
+
         plt.subplot(2, 3, 3)
-        self.plot_spikes(n_time_steps - 1, moving_average = True, mode = 'OFF')
+        self.plot_spikes(n_time_steps - 1, moving_average=True, mode='OFF')
 
         plt.subplot(2, 3, 4)
-        plt.title('Estimated Image, S = DA:\n SNR = %.2f' 
+        plt.title('Estimated Image, S = DA:\n SNR = %.2f'
                   % self.SNR_idx(q))
         S_est = self.data['EM_data'][q]['image_est']
 
-        plt.imshow(gaussian_filter(S_est, sdev), 
-                   cmap = plt.cm.gray, interpolation = 'nearest', 
-                   vmin = vmin, vmax = vmax)
+        plt.imshow(gaussian_filter(S_est, self.blur_sdev),
+                   cmap=plt.cm.gray, interpolation='nearest',
+                   vmin=vmin, vmax=vmax)
         plt.colorbar()
-
 
         plt.subplot(2, 3, 1)
-        plt.title('Actual Image')
-        plt.imshow(gaussian_filter(self.S_gen, sdev), 
-                   cmap = plt.cm.gray, interpolation = 'nearest',
-                   vmin = vmin, vmax = vmax)
-        plt.colorbar()
-    
+        self.plot_base_image()
+
         plt.subplot(2, 3, 5)
         self.plot_path_estimate(q, 0)
 
@@ -276,13 +272,35 @@ class DataAnalyzer:
         plt.tight_layout()
         plt.subplots_adjust(top=0.9)
 
+    def plot_base_image(self):
+        """
+        Plot the original image that generates the data
+
+        Parameters
+        ----------
+        sdev: float
+            blurring of image
+        """
+
+        m1 = np.min(self.S_gen)
+        m2 = np.max(self.S_gen)
+
+        vmin = -0.1 * (m2 - m1) + m1
+        vmax = m2 + 0.1 * (m2 - m1)
+
+        plt.title('Stationary Object in the World')
+        plt.imshow(gaussian_filter(self.S_gen, self.blur_sdev),
+                   cmap=plt.cm.gray, interpolation='nearest',
+                   vmin=vmin, vmax=vmax)
+        plt.colorbar()
+
     def save_images(self):
         for q in range(self.N_itr):
             plt.clf()
             self.plot_EM_estimate(q)
             plt.savefig('img%d.png' % (100 + q))
 
-    def compute_spike_moving_average(self, tau = 0.005):
+    def compute_spike_moving_average(self, tau=0.005):
         """
         Computes the exponential moving average of the spikes
         tau - time constant of moving average, should be a multiple of self.DT
@@ -297,7 +315,7 @@ class DataAnalyzer:
 
         self.Rav = Rav / self.DT
 
-    def plot_spikes(self, t, moving_average = False, mode = 'ON'):
+    def plot_spikes(self, t, moving_average=False, mode='ON'):
         """
         Plots the spiking profile at timestep number t
         t - timestep number to plot
@@ -313,26 +331,73 @@ class DataAnalyzer:
                 self.compute_spike_moving_average()
             s = self.Rav[:, t]
 
-        l = s.shape[0]
-
+        nn = self.L_N ** 2 * 2
         if mode == 'OFF':
-            spikes = s[0:l/2]
+            spikes = s[0: nn / 2]
         elif mode == 'ON':
-            spikes = s[l/2:l]
+            spikes = s[nn / 2: nn]
         else:
-            raise ValueError('mode must be on or off')
+            raise ValueError('mode must be ON or OFF')
 
         vmin = 0.
         vmax = 200.
 
-        plt.imshow(spikes.reshape(self.L_N, self.L_N), 
-                   interpolation = 'nearest', cmap = plt.cm.gray_r,
-                   vmin = vmin, vmax = vmax)
-        plt.title(mode + ' Cells')
-        plt.xlabel('arcmin')
+        if moving_average:
+            st = 'Spike ExpMA'
+        else:
+            st = 'Spikes'
+
+        plt.imshow(spikes.reshape(self.L_N, self.L_N),
+                   interpolation='nearest', cmap=plt.cm.gray_r,
+                   vmin=vmin, vmax=vmax)
+        plt.title('{} for {} Cells at time {}'.format(st, mode, t))
 #        plt.colorbar()
 
+    def plot_firing_rates(self, t, mode='ON'):
+        """
+        Plot the firing rates for each neuron.
 
+        Note: The visualization makes the most sense when the RFs of the
+            neurons form a rectangular grid
+        """
+        frs = self.data['FP'][0] / self.DT
+        nn = self.L_N ** 2 * 2
+        if mode == 'OFF':
+            fr = frs[0: nn / 2, t]
+        elif mode == 'ON':
+            fr = frs[nn / 2: nn, t]
+        else:
+            raise ValueError('mode must be ON or OFF')
+
+        plt.imshow(fr.reshape(self.L_N, self.L_N),
+                   interpolation='nearest',
+                   cmap=plt.cm.gray,
+                   vmin=0, vmax=100.)
+        # t_str = ('lambda(t) (Hz) for {} Cells'.format(mode))
+        # plt.title(t_str)
+
+    def plot_fr_and_spikes(self, t):
+        """
+        Plot the base image, firing rate, and exponential moving
+            average of the spikes at time t
+        t : int
+            Timestep to plot
+        """
+        plt.figure(figsize=(10, 8))
+
+        plt.subplot(2, 2, 1)
+        self.plot_base_image()
+
+        plt.subplot(2, 2, 2)
+        self.plot_firing_rates(t, mode='ON')
+        plt.title('Retinal Image')
+
+        # Spikes
+        plt.subplot(2, 2, 3)
+        self.plot_spikes(t, mode='ON', moving_average=True)
+
+        plt.subplot(2, 2, 4)
+        self.plot_spikes(t, mode='OFF', moving_average=True)
 
     def plot_RFs(self):
         """
@@ -348,12 +413,30 @@ class DataAnalyzer:
         ax.set_xlim((np.min(self.XE), np.max(self.XE)))
         ax.set_ylim((np.min(self.YE), np.max(self.YE)))
         for xe, ye in zip(self.XE, self.YE):
-            circ = plt.Circle((xe, ye), std, color = 'b', alpha = 0.4)
+            circ = plt.Circle((xe, ye), std, color='b', alpha=0.4)
             fig.gca().add_artist(circ)
+
+    def plot_tuning_curves(self, baseline_rate=10.):
+        """
+        Create a plot showing the tuning curves of the neurons
+        """
+        x = np.arange(0, 1, 0.01)
+        l0 = self.data['L0']
+        l1 = self.data['L1']
+        y_on = np.exp(np.log(l0) + x * np.log(l1/l0))
+        y_off = np.exp(np.log(l0) + (1 - x) * np.log(l1/l0))
+        plt.plot(x, y_on, label='ON')
+        plt.plot(x, y_off, label='OFF')
+        plt.plot(x, baseline_rate + 0 * x, '--')
+        plt.xlabel('Stimulus intensity')
+        plt.ylabel('Firing Rate (Hz)')
+        plt.title('Firing rate as a function\n of Stimulus Intensity')
+        plt.legend()
+
 
 if __name__ == '__main__':
     fn = sys.argv[1]
     da = DataAnalyzer.fromfilename(fn)
 
-#plt.plot(SNRs)
-#plt.show()
+# plt.plot(SNRs)
+# plt.show()

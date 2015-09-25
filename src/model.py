@@ -71,14 +71,14 @@ class TheanoBackend(object):
             #  batch, pixel, neuron, time step
 
             # indices: b, i1, j, t
-            t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x')
-                    - t_XE.dimshuffle('x', 'x', 0, 'x')
-                    - t_XR.dimshuffle(0, 'x', 'x', 1))
+            t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x') -
+                    t_XE.dimshuffle('x', 'x', 0, 'x') -
+                    t_XR.dimshuffle(0, 'x', 'x', 1))
             t_dX.name = 'dX'
             # indices: b, i2, j, t
-            t_dY = (t_YS.dimshuffle('x', 0, 'x', 'x')
-                    - t_YE.dimshuffle('x', 'x', 0, 'x')
-                    - t_YR.dimshuffle(0, 'x', 'x', 1))
+            t_dY = (t_YS.dimshuffle('x', 0, 'x', 'x') -
+                    t_YE.dimshuffle('x', 'x', 0, 'x') -
+                    t_YR.dimshuffle(0, 'x', 'x', 1))
             t_dY.name = 'dY'
 
             # Use outer product trick to dot product image with point filters
@@ -143,8 +143,8 @@ class TheanoBackend(object):
                                            self.t_DT, self.t_G],
                                    outputs=[self.t_Ips_gen, self.t_FP_gen])
         self.rng = T.shared_randomstreams.RandomStreams(seed=10)
-        self.t_R_gen = (self.rng.uniform(size=self.t_FP_gen.shape)
-                        < self.t_FP_gen).astype('float32')
+        self.t_R_gen = (self.rng.uniform(size=self.t_FP_gen.shape) <
+                        self.t_FP_gen).astype('float32')
 
         self.spikes = theano.function(inputs=[self.t_S_gen,
                                               self.t_XR, self.t_YR,
@@ -263,11 +263,14 @@ class TheanoBackend(object):
 
 class EMBurak(object):
 
-    def __init__(self, s_gen, d, dt=0.001, dc=100., n_t=50,
-                 l_n=14, a=1., LAMBDA=1., save_mode=False,
+    def __init__(self, s_gen, d, dt=0.001,
+                 n_t=50,
+                 l_n=14, a=1., LAMBDA=1.,
+                 save_mode=False,
                  n_itr=10, s_gen_name=' ',
-                 actual_motion_mode='Diffusion',
-                 motion_prior='PositionDiffusion'):
+                 motion_gen_mode='Diffusion', dc_gen=100.,
+                 motion_prior='PositionDiffusion', dc_infer=100.,
+                 output_dir=''):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -278,16 +281,41 @@ class EMBurak(object):
             -- Initializes the Particle Filter object
             -- Checks that the output directory exists
 
-        ----------
         Parameters
         ----------
-        s_gen : array
-            image that generates the spikes - (L_I, L_I), type = float32
-        d : array
-            dictionary used to infer latent factors,
-               shape = (N_L, N_pix), type = float32
+        s_gen : array, float32, shape (l_i, l_i)
+            Image that generates the spikes -
+        d : array, float32, shape (n_l, n_pix)
+            Dictionary used to infer latent factors
         s_gen_name : str
-            name of image (eg. label)
+            Name of image (eg. label)
+        dt : float
+            Timestep for Simulation
+        n_t : int
+            Number of timesteps of Simulation
+        l_n : int
+            Linear dimension of neuron array
+        a : float
+            Image pixel spacing / receptive field spacing
+        LAMBDA: float
+            Strength of sparse prior
+        save_mode : bool
+            True if you want to save the data
+        n_itr : int
+            Number of iterations to break the EM into
+        s_gen_name : str
+            Name for the generating image
+        motion_gen_mode : str
+            Method to generate motion. Either Diffusion or Experiment
+        dc_gen : float
+            Diffusion constant for generating motion
+        motion_prior : str
+            Prior to use for infering motion
+        dc_infer : float
+            Diffusion constant for inference
+        output_dir : str
+            Files saved to 'output/output_dir' If none, uses a time string
+
         Checks for consistency L_I ** 2 = N_pix
 
         Note that changing certain parameters without reinitializing the class
@@ -296,7 +324,11 @@ class EMBurak(object):
         """
 
         self.data = {}
-        self.output_dir = os.path.join('output/', time_string())
+
+        if output_dir is None:
+            output_dir = time_string()
+        self.output_dir = os.path.join('output/', output_dir)
+
         self.save_mode = save_mode  # If true, save results after EM completes
         print 'The save mode is ' + str(save_mode)
         self.d = d.astype(theano.config.floatX)  # Dictionary
@@ -313,8 +345,9 @@ class EMBurak(object):
 
         # Simulation Parameters
         self.dt = dt  # Simulation timestep
-        self.dc = dc  # Diffusion Constant
-        print 'The diffusion constant is ' + str(self.dc)
+        self.dc_gen = dc_gen  # Diffusion Constant for Generating motion
+        self.dc_infer = dc_infer  # Diffusion Constant for Infering motion
+        print 'The diffusion constant is ' + str(self.dc_gen)
         self.l0 = 10.
         self.l1 = 100.
 
@@ -386,15 +419,15 @@ class EMBurak(object):
                                 self.A, self.d)
         self.set_gain_factor()
 
-        if actual_motion_mode == 'Diffusion':
+        if motion_gen_mode == 'Diffusion':
             self.pg = DiffusionPathGenerator(
-                self.n_t, self.l_i, self.dc, self.dt)
-        elif actual_motion_mode == 'Experiment':
+                self.n_t, self.l_i, self.dc_gen, self.dt)
+        elif motion_gen_mode == 'Experiment':
             self.pg = ExperimentalPathGenerator(
                 self.n_t, 'data/resampled_paths.mat', self.dt)
         else:
-            raise ValueError('actual_motion_mode must'
-                             + 'be Diffusion of Experiment')
+            raise ValueError('motion_gen_mode must' +
+                             'be Diffusion of Experiment')
 
         self.motion_prior = motion_prior
         self.init_particle_filter()
@@ -411,6 +444,8 @@ class EMBurak(object):
         path = self.pg.gen_path()
         self.XR[0, :] = path[0]
         self.YR[0, :] = path[1]
+
+        self.calculate_inner_products()
 
         self.gen_spikes()
         self.pf.Y = self.R.transpose()  # Update reference to spikes for PF
@@ -476,7 +511,7 @@ class EMBurak(object):
         if self.motion_prior == 'PositionDiffusion':
             # Diffusion
             D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
-            sdev = np.sqrt(self.dc * self.dt / 2) * np.ones((D_H,))
+            sdev = np.sqrt(self.dc_infer * self.dt / 2) * np.ones((D_H,))
             ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
             tpd = pf.GaussTPD(D_H, self.n_n, sdev)
             ip = pf.GaussIP(D_H, sdev * 0.001)
@@ -538,8 +573,8 @@ class EMBurak(object):
         out = self.tc.costs(*args)
 
         E, E_bound, E_R, E_rec, E_sp = out
-        print ('Costs of underlying data '
-               + str((E / self.n_t, E_rec / self.n_t)))
+        print ('Costs of underlying data ' +
+               str((E / self.n_t, E_rec / self.n_t)))
 
     def reset(self):
         """
@@ -656,18 +691,35 @@ class EMBurak(object):
         """
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
-        self.data = {'DT': self.dt, 'DC': self.dc, 'L0': self.l0,
-                     'L1': self.l1, 'GAMMA': self.gamma,
-                     'LAMBDA': self.LAMBDA, 'D': self.d, 'N_L': self.n_l,
-                     'a': self.a, 'N_T': self.n_t, 'L_I': self.l_i,
-                     'L_N': self.l_n, 'Rho': self.rho, 'Eps': self.eps,
-                     'N_g_itr': self.n_g_itr, 'N_itr': self.n_itr,
-                     'N_P': self.n_p, 'XS': self.XS, 'YS': self.YS,
-                     'XE': self.XE, 'YE': self.YE, 'Var': self.Var,
-                     'G': self.G, 'XR': self.XR, 'YR': self.YR, 'IE': self.IE,
+        self.data = {'DT': self.dt,
+                     'DC_gen': self.dc_gen,
+                     'DC_infer': self.dc_infer,
+                     'L0': self.l0,
+                     'L1': self.l1,
+                     'GAMMA': self.gamma,
+                     'LAMBDA': self.LAMBDA,
+                     'D': self.d,
+                     'N_L': self.n_l,
+                     'a': self.a,
+                     'N_T': self.n_t,
+                     'L_I': self.l_i,
+                     'L_N': self.l_n,
+                     'Rho': self.rho,
+                     'Eps': self.eps,
+                     'N_g_itr': self.n_g_itr,
+                     'N_itr': self.n_itr,
+                     'N_P': self.n_p,
+                     'XS': self.XS, 'YS': self.YS,
+                     'XE': self.XE, 'YE': self.YE,
+                     'Var': self.Var,
+                     'G': self.G,
+                     'XR': self.XR, 'YR': self.YR,
+                     'IE': self.IE,
                      'actual_motion_mode': self.pg.mode(),
                      'S_gen': self.s_gen, 'S_gen_name': self.s_gen_name,
-                     'R': self.R, 'motion_prior': self.motion_prior}
+                     'R': self.R,
+                     'Ips': self.Ips, 'FP': self.FP,
+                     'motion_prior': self.motion_prior}
 
     def save(self):
         """
@@ -683,6 +735,15 @@ class EMBurak(object):
                           'data_' + time_string() + '.pkl')
         pkl.dump(self.data, open(fn, 'wb'))
         return fn
+
+    def calculate_inner_products(self):
+        """
+        Calculates the inner products used
+        """
+        self.Ips, self.FP = self.tc.RFS(
+            self.s_gen, self.XR, self.YR, self.l0, self.l1,
+            self.dt, self.G)
+
 
 # def true_path_infer_image_costs(self, N_g_itr = 10):
 #        """
@@ -706,10 +767,3 @@ class EMBurak(object):
 #            self.pf.plot(self.XR[0], self.YR[0], self.DT)
 
 
-#    def calculate_inner_products(self):
-#        """
-#        Calculates the inner products used
-#        """
-#        self.Ips, self.FP = self.RFS(self.XR, self.YR,
-#                                     self.L0, self.L1,
-#                                     self.DT, self.G)

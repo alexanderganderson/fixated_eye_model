@@ -1,9 +1,10 @@
 from model import *
 from analyzer import *
 
-# Tests the algorithm's ability to run multiple times without reinitializing the objects
+# Tests the algorithm's ability to run multiple times without
+# reinitializing the objects
 
-N_replicates = 2 # Run each image <> times
+N_replicates = 2  # Run each image <> times
 
 try:
     data = loadmat('data/mnist_dictionary.mat')
@@ -13,19 +14,19 @@ except IOError:
     raise IOError
 
 _, N_pix = D.shape
-L_I = int(np.sqrt(N_pix)) # Linear dimension of image
+L_I = int(np.sqrt(N_pix))  # Linear dimension of image
 
 ig = ImageGenerator(L_I)
 
-ig.make_digit(mode = 'random')
+ig.make_digit(mode='random')
 ig.normalize()
 S_gen = ig.img
-emb = EMBurak(S_gen, D, N_T = 20, save_mode = True)
+emb = EMBurak(S_gen, D, N_T=20, save_mode=True)
 filenames = []
 for _ in range(N_replicates):
     emb.reset()
     emb.gen_data()
-    emb.run_EM(N_itr = 5)
+    emb.run_EM(N_itr=5)
     filename = emb.save
     filenames.append(filename)
 

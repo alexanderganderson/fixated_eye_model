@@ -41,13 +41,16 @@ class ImageGenerator:
             K, self.L_I, _ = IMAGES.shape
 
             if mode == 'fixed':
-                k = 37  # Chose a particular image that will work well
+                # Chose a particular image that will work well
+                k = 37  # zero
+                k = 35  # two
             elif mode == 'random':
                 k = np.random.randint(K)
             else:
                 raise ValueError('unrecognized mode')
 
             self.reset_img()
+            self.k = k
             self.img[:, :] = IMAGES[k]
             self.img_name = str(LABELS[k])
 
@@ -58,7 +61,7 @@ class ImageGenerator:
     def make_gabor(self, x0=0., y0=0., k=None,
                    eta=np.pi / 4., phi=0., sig=None):
         """
-        Make a Gabor 
+        Make a Gabor
         x0, y0 - gabor center relative to the center of the image
         k = frequency amplitude
         eta - frequency angle
@@ -67,9 +70,9 @@ class ImageGenerator:
         kx = k (cos eta, sin eta) * (x, y)
         """
 
-        if (k == None):
+        if k is None:
             k = 4. * np.pi / self.L_I
-        if (sig == None):
+        if sig is None:
             sig = self.L_I / 3.
 
         tmp = np.arange(-self.L_I / 2, self.L_I / 2)
@@ -91,10 +94,10 @@ class ImageGenerator:
         self.img_name = 'E'
 
     def make_big_E(self):
-        self.img[1:3, 2:-2] = 1
+        self.img[2:4, 2:-2] = 1
         self.img[self.L_I / 2 - 1: self.L_I / 2 + 1, 2:-2] = 1
         self.img[-4:-2, 2:-2] = 1
-        self.img[1:-2, 2:4] = 1
+        self.img[2:-2, 2:4] = 1
         self.img_name = 'bigE'
 
     def random(self):
