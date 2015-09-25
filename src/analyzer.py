@@ -430,7 +430,7 @@ class DataAnalyzer:
         plt.plot(x, baseline_rate + 0 * x, '--')
         plt.xlabel('Stimulus intensity')
         plt.ylabel('Firing Rate (Hz)')
-        plt.title('Firing rate as a function\n of Stimulus Intensity')
+        plt.title('Firing rate as a function of Stimulus Intensity')
         plt.legend()
 
 
