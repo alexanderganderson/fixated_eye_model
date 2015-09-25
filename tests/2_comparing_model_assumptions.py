@@ -19,8 +19,8 @@ L_I = 14
 ig = ImageGenerator(L_I)
 ig.make_big_E()
 ig.normalize()
-DC = 50.
-n_t = 50
+DC = 75.
+n_t = 100
 D = np.eye((L_I ** 2))
 LAMBDA = 0.0
 

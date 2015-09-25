@@ -267,7 +267,7 @@ class EMBurak(object):
                  n_t=50,
                  l_n=14, a=1., LAMBDA=1.,
                  save_mode=False,
-                 n_itr=10, s_gen_name=' ',
+                 n_itr=20, s_gen_name=' ',
                  motion_gen_mode='Diffusion', dc_gen=100.,
                  motion_prior='PositionDiffusion', dc_infer=100.,
                  output_dir=''):
