@@ -44,4 +44,4 @@ plt.show()
 
 # convert -set delay 30 -colorspace GRAY -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif
 
-# convert -set delay 30 -colors 256 -dispose 1 -loop 0 *.png alg_performance.gif
+# convert -set delay 30 -colors 256 -dispose 1 -loop 0 *.jpg alg_performance.gif
