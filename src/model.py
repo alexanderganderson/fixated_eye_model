@@ -9,7 +9,8 @@ import os
 from utils.path_generator import (DiffusionPathGenerator,
                                   ExperimentalPathGenerator)
 import utils.particle_filter_new as pf
-from utils.theano_gradient_routines import ada_delta
+# from utils.theano_gradient_routines import ada_delta
+from utils.fista import fista_updates
 from utils.SNR import SNR
 import cPickle as pkl
 from utils.time_filename import time_string
@@ -20,7 +21,7 @@ class TheanoBackend(object):
     """
     Theano backend for executing the computations
     """
-    def __init__(self, XS, YS, XE, YE, IE, Var, A, d):
+    def __init__(self, XS, YS, XE, YE, IE, Var, A, d, pos_only=True):
         """
         Initializes all theano variables and functions
         """
@@ -206,7 +207,10 @@ class TheanoBackend(object):
         self.t_E_sp = self.t_LAMBDA * T.sum(T.abs_(self.t_A))
         self.t_E_sp.name = 'E_sp'
 
-        self.t_E = self.t_E_R + self.t_E_bound + self.t_E_sp
+        self.t_E_rec = self.t_E_R + self.t_E_bound
+        self.t_E_rec.name = 'E_rec'
+
+        self.t_E = self.t_E_rec + self.t_E_sp
         self.t_E.name = 'E'
 
         # Cost from poisson terms separated by batches for particle filter log
@@ -228,17 +232,28 @@ class TheanoBackend(object):
             outputs=energy_outputs)
 
         # Define theano variables for gradient descent
-        self.t_Rho = T.scalar('Rho')
-        self.t_Eps = T.scalar('Eps')
-        self.t_ada_params = (self.t_Rho, self.t_Eps)
+        # self.t_Rho = T.scalar('Rho')
+        # self.t_Eps = T.scalar('Eps')
+        # self.t_ada_params = (self.t_Rho, self.t_Eps)
 
-        self.grad_updates = ada_delta(self.t_E, self.t_A, *self.t_ada_params)
-        self.t_A_Eg2, self.t_A_EdS2, _ = self.grad_updates.keys()
+        # self.grad_updates = ada_delta(self.t_E, self.t_A, *self.t_ada_params)
+        # self.t_A_Eg2, self.t_A_EdS2, _ = self.grad_updates.keys()
+
+        # Define variables for FISTA minimization
+        self.t_L = T.scalar('L')
+
+        self.grad_updates = fista_updates(
+            self.t_A, self.t_E_rec, self.t_LAMBDA,
+            self.t_L, pos_only=pos_only)
+
+        _, self.t_fista_X, self.t_T = self.grad_updates.keys()
+
+        # Initialize t_A, and extra variables
 
         inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt,
                   self.t_L0, self.t_L1, self.t_DT, self.t_G,
-                  self.t_GAMMA, self.t_LAMBDA, self.t_Rho, self.t_Eps]
-
+                  # self.t_GAMMA, self.t_LAMBDA, self.t_Rho, self.t_Eps]
+                  self.t_GAMMA, self.t_LAMBDA, self.t_L]
         self.img_grad = theano.function(inputs=inputs,
                                         outputs=energy_outputs,
                                         updates=self.grad_updates)
@@ -252,20 +267,48 @@ class TheanoBackend(object):
         """
         self.t_A.set_value(np.zeros_like(self.A).astype('float32'))
 
+    def calculate_L(self, n_t, n_n, l0, l1, dt, d_scl, ctant):
+        """
+        Return the value of the Lipschitz constant of the smooth part
+            of the cost function
+
+        Parameters
+        ----------
+        n_t : int
+            number of timesteps
+        n_n : int
+            number of neurons
+        l0 : float
+            baseline firing rate
+        l1 : float
+            maximum firing rate
+        dt : float
+            timestep
+        d_scl : float
+            scale of dictionary elements (mean sum of squares)
+        ctant : float
+            constant to loosen our bound
+        """
+        return (n_t * n_n * l1 * dt * d_scl ** 2 *
+                np.log(l1/l0) ** 2 * ctant).astype('float32')
+
     def reset_m_aux(self):
         """
         Resets auxillary gradient descent variables for the M step
-            eg. for ADADelta, we reset the RMS of dx and g
+            eg. fista we reset the copy of A and the step size
         """
-        self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
-        self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
+        # self.t_A_Eg2.set_value(np.zeros_like(self.A).astype('float32'))
+        # self.t_A_EdS2.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_T.set_value(np.array([1.]).astype(theano.config.floatX))
+        # self.t_fista_X.set_value(np.zeros_like(self.A).astype('float32'))
+        self.t_fista_X.set_value(self.t_A.get_value())
 
 
 class EMBurak(object):
 
     def __init__(self, s_gen, d, dt=0.001,
                  n_t=50,
-                 l_n=14, a=1., LAMBDA=1.,
+                 l_n=14, a=1., LAMBDA=0.,
                  save_mode=False,
                  n_itr=20, s_gen_name=' ',
                  motion_gen_mode='Diffusion', dc_gen=100.,
@@ -332,6 +375,7 @@ class EMBurak(object):
         self.save_mode = save_mode  # If true, save results after EM completes
         print 'The save mode is ' + str(save_mode)
         self.d = d.astype(theano.config.floatX)  # Dictionary
+        self.d_scl = np.sqrt((d ** 2).sum(1).mean())
         self.n_l, self.n_pix = d.shape
         # n_l - number of latent factors
         # n_pix - number of pixels in the image
@@ -361,13 +405,16 @@ class EMBurak(object):
 
         # EM Parameters
         # M - Parameters (ADADELTA)
-        self.rho = 0.4
-        self.eps = 0.001
-        self.n_g_itr = 10
+        # self.rho = 0.4
+        # self.eps = 0.001
+
+        # M - parameters (FISTA)
+        self.fista_c = 0.5  # Constant to multiply fista L
+        self.n_g_itr = 5
         self.n_itr = n_itr
 
         # E Parameters (Particle Filter)
-        self.n_p = 25  # Number of particles for the EM
+        self.n_p = 15  # Number of particles for the EM
 
         # Initialize pixel and LGN positions
         self.a = a  # pixel spacing
@@ -486,10 +533,6 @@ class EMBurak(object):
         # Identity of LGN cells (ON = 0, OFF = 1)
         self.IE = np.zeros((self.n_n,)).astype('float32')
         self.IE[0: self.n_n / 2] = 1
-
-        # Prepare the hand calculation of the gradient (prep for hessian)
-
-    #        t_Dp =
 
     def set_gain_factor(self):
         """
@@ -611,15 +654,19 @@ class EMBurak(object):
         result is saved in t_A.get_value()
         """
         self.tc.reset_m_aux()
-        print ('Total Energy / t | Bound. Energy / t '
-               + '| Spike Energy / t | + Sparse E / t |  SNR')
+        print ('Total Energy / t | Bound. Energy / t ' +
+               '| Spike Energy / t | + Sparse E / t |  SNR')
+        fista_l = self.tc.calculate_L(
+            t, self.n_n, self.l0, self.l1, self.dt, self.d_scl, self.fista_c)
+
         for v in range(N_g_itr):
             args = (self.pf.XS[0:t, :, 0].transpose(),
                     self.pf.XS[0:t, :, 1].transpose(),
                     self.R[:, 0:t], self.pf.WS[0:t].transpose(),
                     self.l0, self.l1, self.dt,
                     self.G, self.gamma, self.LAMBDA,
-                    self.rho, self.eps)
+                    # self.rho, self.eps)
+                    fista_l)
 
             out = self.tc.img_grad(*args)
             self.img_SNR = SNR(self.s_gen, self.tc.image_est())
@@ -662,7 +709,11 @@ class EMBurak(object):
             self.run_E(t)
 
             # Run M step
-            self.run_M(t, N_g_itr=self.n_g_itr)
+            if u <= 2:
+                c = 4
+            else:
+                c = 1
+            self.run_M(t, N_g_itr=self.n_g_itr * c)
 
             iteration_data = {'time_steps': t, 'path_means': self.pf.means,
                               'path_sdevs': self.pf.sdevs,
@@ -704,8 +755,8 @@ class EMBurak(object):
                      'N_T': self.n_t,
                      'L_I': self.l_i,
                      'L_N': self.l_n,
-                     'Rho': self.rho,
-                     'Eps': self.eps,
+                     # 'Rho': self.rho,
+                     # 'Eps': self.eps,
                      'N_g_itr': self.n_g_itr,
                      'N_itr': self.n_itr,
                      'N_P': self.n_p,
