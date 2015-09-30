@@ -32,7 +32,7 @@ S_gen_name = ig.img_name
 for LAMBDA in [0.0, 0.01, 0.1, 0.5]:
     emb = EMBurak(S_gen, D, n_t=100, save_mode=True,
                   s_gen_name=S_gen_name, dc_gen=100., dc_infer=100.,
-                  output_dir=output_dir, LAMBDA=0.)
+                  output_dir=output_dir, LAMBDA=LAMBDA)
     emb.gen_data()
     emb.run_EM()
 
