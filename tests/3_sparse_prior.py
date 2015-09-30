@@ -8,13 +8,14 @@ from scipy.io import loadmat
 from src.model import EMBurak
 from utils.image_gen import ImageGenerator
 
-# Tests the algorithm using a '0' from mnist and a sparse coding dictionary
-try:
-    data = loadmat('sparse_coder/output/mnist_dictionary_pos.mat')
-    D = data['D']
-except IOError:
-    print 'Need to have a dictionary file'
-    raise IOError
+output_dir = 'sparsity'
+DC = 100.
+n_t = 100
+n_repeats = 10
+
+# Sparse coding dictionary prior
+data = loadmat('sparse_coder/output/mnist_dictionary_pos.mat')
+D = data['D']
 
 _, N_pix = D.shape
 L_I = int(np.sqrt(N_pix))  # Linear dimension of image
@@ -23,20 +24,31 @@ ig = ImageGenerator(L_I)
 ig.make_digit()
 ig.normalize()
 
-output_dir = 'sparsity'
 
-S_gen = ig.img
-S_gen_name = ig.img_name
+emb = EMBurak(ig.img, D, n_t=100, save_mode=True,
+              s_gen_name=ig.img_name, dc_gen=DC, dc_infer=DC,
+              output_dir=output_dir, LAMBDA=0.)
 
-
-for LAMBDA in [0.0, 0.01, 0.1, 0.5]:
-    emb = EMBurak(S_gen, D, n_t=100, save_mode=True,
-                  s_gen_name=S_gen_name, dc_gen=100., dc_infer=100.,
-                  output_dir=output_dir, LAMBDA=LAMBDA)
+for _ in range(n_repeats):
+    emb.reset()
     emb.gen_data()
     emb.run_EM()
-
     emb.save()
+
+# Independent Pixel Prior
+D = np.eye((L_I ** 2))
+emb = EMBurak(ig.img, D, n_t=n_t, LAMBDA=0.0, save_mode=True,
+              s_gen_name=ig.img_name, dc_gen=DC, dc_infer=DC,
+              output_dir=output_dir)
+
+for _ in range(n_repeats):
+    emb.reset()
+    emb.gen_data()
+    emb.run_EM()
+    emb.save()
+
+
+
 
 # convert -set delay 30 -colorspace GRAY -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif
 
