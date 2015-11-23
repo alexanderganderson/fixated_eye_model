@@ -9,12 +9,12 @@ from src.model import EMBurak
 from utils.image_gen import ImageGenerator
 
 output_dir = 'sparsity'
-DC = 100.
+DC = 50.
 n_t = 100
-n_repeats = 10
+n_repeats = 5
 
 # Sparse coding dictionary prior
-data = loadmat('sparse_coder/output/mnist_dictionary_pos.mat')
+data = loadmat('sparse_coder/output/mnist_dictionary.mat')
 D = data['D']
 
 _, N_pix = D.shape
