@@ -1,5 +1,6 @@
 import time
 
+
 def time_string():
     """
     Returns a time string in local time

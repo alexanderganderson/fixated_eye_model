@@ -11,7 +11,7 @@ class PoissonLP(PF.LikelihoodPotential):
     Poisson likelihood potential for use in the burak EM
     """
 
-    def __init__(self, D_O, D_H, L0, L1, DT, G, spike_energy):
+    def __init__(self, D_O, D_H, spike_energy):
         """
         D_O - dimension of output (number of neurons)
         D_H - dimesion of hidden state
@@ -25,10 +25,6 @@ class PoissonLP(PF.LikelihoodPotential):
         if not (D_H == 2 or D_H == 4):
             raise ValueError('D_H should be 2 or 4')
         PF.LikelihoodPotential.__init__(self, D_H, D_O)
-        self.L0 = L0
-        self.L1 = L1
-        self.DT = DT
-        self.G = G
         self.spike_energy = spike_energy
 
     def prob(self, Yc, Xc):
@@ -54,7 +50,6 @@ class PoissonLP(PF.LikelihoodPotential):
         _R = np.zeros((self.D_O, 1)).astype('float32')
         _R[:, 0] = Yc
         # to pass to spike_prob function, N_P batches, 1 time step
-        Es = - \
-            self.spike_energy(_XR, _YR, _R, self.L0, self.L1, self.DT, self.G)
+        Es = self.spike_energy(_XR, _YR, _R)
         Es = Es - Es.mean()
-        return np.exp(Es)
+        return np.exp(-Es)

@@ -13,13 +13,14 @@ from utils.image_gen import ImageGenerator
 
 try:
     # data = loadmat('data/mnist_dictionary.mat')
-    data = loadmat('sparse_coder/output/mnist_dictionary_pos.mat')
+    data = loadmat('sparse_coder/output/mnist_dictionary.mat')
     D = data['D']
 except IOError:
     print 'Need to have a dictionary file'
     raise IOError
 
 _, N_pix = D.shape
+
 L_I = int(np.sqrt(N_pix))  # Linear dimension of image
 
 ig = ImageGenerator(L_I)
@@ -30,19 +31,41 @@ ig.normalize()
 S_gen = ig.img
 S_gen_name = ig.img_name
 
-emb = EMBurak(S_gen, D, n_t=100, save_mode=True,
-              s_gen_name=S_gen_name, dc_gen=100., dc_infer=100.)
+emb = EMBurak(S_gen, D, n_t=5, save_mode=True,
+              s_gen_name=S_gen_name, dc_gen=100., dc_infer=100.,
+              n_itr=1)
 emb.gen_data()
+
 emb.run_EM()
 
-emb.save()
+from utils.gradient_checker import hessian_check
 
-da = DataAnalyzer(emb.data)
+x0 = emb.tc.get_A()
 
-# Plot the Estimated Image and Path after the algorithm ran
-da.plot_EM_estimate(da.N_itr - 1)
-plt.show()
 
-# convert -set delay 30 -colorspace GRAY -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif
+def f(A):
+    emb.tc.t_A.set_value(A.astype('float32'))
+    return emb.get_spike_cost()
 
-# convert -set delay 30 -colors 256 -dispose 1 -loop 0 *.jpg alg_performance.gif
+
+def fpp(A):
+    emb.tc.t_A.set_value(A.astype('float32'))
+    return emb.get_hessian()
+
+for _ in range(2):
+    u, v = hessian_check(f, fpp, (D.shape[0],), x0=x0)
+    print u, v
+
+# emb.save()
+
+# da = DataAnalyzer(emb.data)
+
+# # Plot the Estimated Image and Path after the algorithm ran
+# da.plot_EM_estimate(da.N_itr - 1)
+# plt.show()
+
+# convert -set delay 30 -colorspace GRAY -colors 256
+#      -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif
+
+# convert -set delay 30 -colors 256
+#     -dispose 1 -loop 0 *.jpg alg_performance.gif
