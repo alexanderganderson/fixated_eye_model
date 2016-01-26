@@ -8,23 +8,21 @@ import cPickle as pkl
 
 from utils.path_generator import (DiffusionPathGenerator,
                                   ExperimentalPathGenerator)
-import utils.particle_filter_new as pf
-from utils.SNR import SNR
+import utils.particle_filter as pf
 from utils.time_filename import time_string
 from utils.BurakPoissonLP import PoissonLP
+from utils.hex_lattice import gen_hex_lattice
 from src.theano_backend import TheanoBackend
 
 
 class EMBurak(object):
 
-    def __init__(self, s_gen, d, dt=0.001,
-                 n_t=50,
-                 l_n=14, a=1., lamb=0.,
-                 save_mode=False,
-                 n_itr=20, s_gen_name=' ',
-                 motion_gen_mode='Diffusion', dc_gen=100.,
-                 motion_prior='PositionDiffusion', dc_infer=100.,
-                 output_dir=''):
+    def __init__(
+        self, s_gen, d, motion_gen, motion_prior,
+        dt=0.001, n_t=50, l_n=14, ds=1., de=1., lamb=0.,
+        tau=0.05, save_mode=False, n_itr=20, s_gen_name=' ',
+        output_dir_base=''
+    ):
         """
         Initializes the parts of the EM algorithm
             -- Sets all parameters
@@ -37,20 +35,24 @@ class EMBurak(object):
 
         Parameters
         ----------
-        s_gen : array, float32, shape (l_i, l_i)
-            Image that generates the spikes -
+        s_gen : array, float32, shape (l_i, l_i), entries in [0, 1]
+            Image that generates the spikes
         d : array, float32, shape (n_l, n_pix)
             Dictionary used to infer latent factors
         s_gen_name : str
             Name of image (eg. label)
         dt : float
             Timestep for Simulation
+        tau : float
+            Decay constant for hessian
+        ds : float
+            Spacing between pixels of the image
+        de : float
+            Spacing between neurons
         n_t : int
             Number of timesteps of Simulation
         l_n : int
             Linear dimension of neuron array
-        a : float
-            Image pixel spacing / receptive field spacing
         lamb: float
             Strength of sparse prior
         save_mode : bool
@@ -59,18 +61,24 @@ class EMBurak(object):
             Number of iterations to break the EM into
         s_gen_name : str
             Name for the generating image
-        motion_gen_mode : str
-            Method to generate motion. Either Diffusion or Experiment
-        dc_gen : float
-            Diffusion constant for generating motion
-        motion_prior : str
-            Prior to use for infering motion
-        dc_infer : float
-            Diffusion constant for inference
-        output_dir : str
-            Files saved to 'output/output_dir' If none, uses a time string
-
-        Checks for consistency L_I ** 2 = N_pix
+        motion_gen : dict
+            Dictionary containing:
+            mode: str
+                Either Diffusion or Experiment
+            dc_gen : float
+                Diffusion constant for generating the path
+        motion_prior : dict
+            Dictionary containing:
+            'mode': str
+                either PositionDiffusion or VelocityDiffusion
+            dc : float
+                Position Diffusion Constant
+            dcv : float
+                Velocity Diffusion Constant
+            v0 : float
+                Initial velocity for Velocity Diffusion Model
+        output_dir_base : str
+            Files saved to 'output/output_dir_base' If none, uses a time string
 
         Note that changing certain parameters without reinitializing the class
         may have unexpected effects (because the changes won't necessarily
@@ -78,211 +86,216 @@ class EMBurak(object):
         """
 
         self.data = {}
+        self.save_mode = save_mode
 
-        if output_dir is None:
-            output_dir = time_string()
-        self.output_dir = os.path.join('output/', output_dir)
+        d = d.astype('float32')
 
-        self.save_mode = save_mode  # If true, save results after EM completes
-        print 'The save mode is ' + str(save_mode)
-        self.d = d.astype('float32')  # Dictionary
-        self.d_scl = np.sqrt((d ** 2).sum(1).mean())
-        self.n_l, self.n_pix = d.shape
-        # n_l - number of latent factors
-        # n_pix - number of pixels in the image
-
-        self.s_gen = s_gen.astype('float32')
+        s_gen = s_gen.astype('float32')
+        # Assumes that the first dimension is 'Y'
+        #    and the second dimension is 'X'
         self.s_gen_name = s_gen_name
-        self.l_i = s_gen.shape[0]  # Linear dimension of the image
 
-        if not self.l_i ** 2 == self.n_pix:
-            raise ValueError('Mismatch between dictionary and image size')
+        print 'The save mode is {}'.format(save_mode)
 
         # Simulation Parameters
         self.dt = dt  # Simulation timestep
-        self.dc_gen = dc_gen  # Diffusion Constant for Generating motion
-        self.dc_infer = dc_infer  # Diffusion Constant for Infering motion
-        print 'The diffusion constant is {}'.format(self.dc_gen)
         self.l0 = 10.
         self.l1 = 100.
 
         # Problem Dimensions
         self.n_t = n_t  # Number of time steps
         self.l_n = l_n  # Linear dimension of neuron receptive field grid
+        self.n_l, n_pix = d.shape  # number of latent factors, image pixels
+        self.l_i = s_gen.shape[0]  # Linear dimension of the image
+
+        if not self.l_i ** 2 == n_pix:
+            raise ValueError('Mismatch between dictionary and image size')
 
         # Image Prior Parameters
         self.gamma = 100.  # Pixel out of bounds cost parameter
         self.lamb = lamb  # the sparse prior is delta (S-DA) + lamb * |A|
 
         # EM Parameters
-        # M - Parameters (ADADELTA)
-        # self.rho = 0.4
-        # self.eps = 0.001
-
         # M - parameters (FISTA)
         self.fista_c = 0.8  # Constant to multiply fista L
         self.n_g_itr = 5
         self.n_itr = n_itr
+        self.tau = tau  # Decay constant for summing hessian
 
         # E Parameters (Particle Filter)
-        self.n_p = 5  # Number of particles for the EM
+        self.n_p = 15  # Number of particles for the EM
 
-        # Initialize pixel and LGN positions
-        self.a = a  # pixel spacing
-        # Position of pixels
-        self.XS = np.arange(- self.l_i / 2, self.l_i / 2)
-        self.YS = np.arange(- self.l_i / 2, self.l_i / 2)
-        self.XS = self.XS.astype('float32')
-        self.YS = self.YS.astype('float32')
-        self.XS *= self.a
-        self.YS *= self.a
-
-        # Position of LGN receptive fields
-        self.init_rf_centers()
+        (self.n_n, XE, YE, IE, XS, YS, neuron_mode
+         ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de)
 
         # Variances of Gaussians for each pixel
-        self.Var = 0.25 * np.ones((self.l_i,)).astype('float32')
-
-        # Gain factor (to be set later)
-        G = 1.
-
-        # X-Position of retina (batches, timesteps), batches used for inference
-        # only
-        self.XR = np.zeros((1, self.n_t)).astype('float32')
-        # Y-Position of retina
-        self.YR = np.zeros((1, self.n_t)).astype('float32')
-
-        # Spikes (1 or 0)
-        self.R = np.zeros((self.n_n, self.n_t)).astype('float32')
-
-        # Initial Value for Sparse Coefficients
-        A0 = np.zeros((self.n_l,)).astype('float32')
-
-        # Initial Value for Hessian
-        H0 = np.zeros((self.n_l, self.n_l)).astype('float32')
-
-        # Shapes of other variables used elsewhere
-
-        # Pixel values for generating image (same shape as estimated image)
-        #        self.s_gen = np.zeros((self.l_i, self.l_i)).astype('float32')
-        # Assumes that the first dimension is 'Y'
-        #    and the second dimension is 'X'
-
-        # Weighting for batches and time points
-        # self.Wbt = np.ones((self.n_b, self.n_t)).astype('float32')
-
-        # Dictionary going from latent factors to image
-        #       self.d = np.zeros((self.n_l, self.n_pix)).astype('float32')
+        Var = 0.25 * (ds ** 2) * np.ones((self.l_i,)).astype('float32')
 
         self.tc = TheanoBackend(
-            self.XS, self.YS, self.XE, self.YE, self.IE, self.Var,
-            A0, H0, self.d, self.l0, self.l1, self.dt, G,
-            self.gamma, self.lamb)
-        self.set_gain_factor()
+            XS, YS, XE, YE, IE, Var,
+            d, self.l0, self.l1, self.dt, 1.,
+            self.gamma, self.lamb, self.tau)
+        self.set_gain_factor(s_gen.shape)
 
-        if motion_gen_mode == 'Diffusion':
+        if motion_gen['mode'] == 'Diffusion':
             self.pg = DiffusionPathGenerator(
-                self.n_t, self.l_i, self.dc_gen, self.dt)
-        elif motion_gen_mode == 'Experiment':
+                self.n_t, self.l_i, motion_gen['dc'], self.dt)
+        elif motion_gen['mode'] == 'Experiment':
             self.pg = ExperimentalPathGenerator(
-                self.n_t, 'data/resampled_paths.mat', self.dt)
+                self.n_t, motion_gen['fpath'], self.dt)
         else:
-            raise ValueError('motion_gen_mode must'
-                             'be Diffusion of Experiment')
+            raise ValueError(
+                'motion_gen[mode] must be Diffusion of Experiment')
 
+        self.init_particle_filter(motion_prior)
         self.motion_prior = motion_prior
-        self.init_particle_filter()
 
-        if (self.save_mode):
-            self.init_output_dir()
+        if self.save_mode:
+            self.output_dir = self.init_output_dir(output_dir_base)
 
         print 'Initialization done'
 
-    def gen_data(self):
+    def gen_data(self, s_gen, pg=None):
         """
         Generates a path and spikes
         Builds a dictionary saving these data
+
+        Parameters
+        ----------
+        s_gen : array, shape (l_i, l_i)
+            Image that generates the spikes
+        pg : PathGenerator
+            Instance of path generator
+
+        Returns
+        -------
+        XR : array, shape (1, n_t)
+            X-Position of path generating spikes
+        YR : array, shape (1, n_t)
+            Y-Position of path generating spikes
+        R : array, shape (n_n, n_t)
+            Array containing the spike train for each neuron and timestep
         """
+
         # Generate Path
-        path = self.pg.gen_path()
-        self.XR[0, :] = path[0]
-        self.YR[0, :] = path[1]
+        if pg is None:
+            pg = self.pg
+        path = pg.gen_path()
+        XR = path[0][np.newaxis, :].astype('float32')
+        YR = path[1][np.newaxis, :].astype('float32')
 
-        self.calculate_inner_products()
+        self.calculate_inner_products(s_gen, XR, YR)
 
-        self.gen_spikes()
-        self.pf.Y = self.R.transpose()  # Update reference to spikes for PF
+        R = self.tc.spikes(s_gen, XR, YR)[0]
+        print 'The mean firing rate is {:.2f}'.format(R.mean() / self.dt)
+
+        self.pf.Y = R.transpose()  # Update reference to spikes for PF
         # TODO: EWW
 
         if self.save_mode:
-            self.build_param_and_data_dict()
+            self.build_param_and_data_dict(s_gen, XR, YR, R)
 
-    def init_rf_centers(self):
+        return XR, YR, R
+
+    @staticmethod
+    def init_pix_rf_centers(l_n, l_i, ds, de, mode='sqr'):
         """
         Initialize the centers of the receptive fields of the neurons
+            Creates a population of on cells and off cells
+
+        Parameters
+        ----------
+        l_n : int
+            Length of the neuron array
+        l_i : int
+            Length of image array
+        ds : float
+            Spacing between pixels
+        de : float
+            Spacing between neurons
+        mode : str
+            Generate neuron array either a square grid or a hexagonal grid
+
+        Returns
+        -------
+        n_n : int
+            Number of neurons
+        XE : float array, shape (n_n,)
+            X Coordinate of neuron centers
+        YE : float array, (n_n,)
+            Y Coordinate of neuron centers
+        IE : float array, (n_n,)
+            Identity of neurons (0 = ON, 1 = OFF)
+        XS : float array, (l_i,)
+            X Coordinate of Pixel centers
+        YS : float array, (l_i,)
+            Y Coordinate of Pixel centers
         """
-        self.n_n = 2 * self.l_n ** 2
-        self.XE, self.YE = np.meshgrid(
-            np.arange(- self.l_n / 2, self.l_n / 2),
-            np.arange(- self.l_n / 2, self.l_n / 2)
-        )
 
-        self.XE = self.XE.ravel().astype('float32')
-        self.YE = self.YE.ravel().astype('float32')
-#        self.XE *= self.a
-#        self.YE *= self.a
+        if mode == 'sqr':
+            XE, YE = np.meshgrid(
+                de * np.arange(- l_n / 2, l_n / 2),
+                de * np.arange(- l_n / 2, l_n / 2))
+            XE, YE = XE.ravel(), YE.ravel()
+        elif mode == 'hex':
+            XE, YE = gen_hex_lattice(l_n * de, a=de)
+        else:
+            raise ValueError('Unrecognized Neuron Mode {}'.format(mode))
+        XE, YE = XE.astype('float32'), YE.astype('float32')
 
-        def double_array(m):
-            """
-            m - 1d array to be doubled
-            :rtype : array that is two copies of m concatenated
-            """
-            l = m.shape[0]
-            res = np.zeros((2 * l,))
-            res[0:l] = m
-            res[l: 2 * l] = m
-            return res
-
-        self.XE = double_array(self.XE)
-        self.YE = double_array(self.YE)
+        XE = np.concatenate((XE, XE))
+        YE = np.concatenate((YE, YE))
+        n_n = XE.size
 
         # Identity of LGN cells (ON = 0, OFF = 1)
-        self.IE = np.zeros((self.n_n,)).astype('float32')
-        self.IE[0: self.n_n / 2] = 1
+        IE = np.zeros((n_n,)).astype('float32')
+        IE[0: n_n / 2] = 1
 
-    def set_gain_factor(self):
+        # Position of pixels
+        XS = ds * np.arange(- l_i / 2, l_i / 2).astype('float32')
+        YS = ds * np.arange(- l_i / 2, l_i / 2).astype('float32')
+
+        return n_n, XE, YE, IE, XS, YS, mode
+
+    def set_gain_factor(self, s_gen_shape):
         """
         Sets the gain factor so that an image with pixels of intensity 1
             results in spikes at the maximum firing rate
         """
         G = 1.
         self.tc.set_gain_factor(G)
-        Ips, FP = self.tc.RFS(np.ones_like(self.s_gen), self.XR, self.YR)
+
+        Ips, FP = self.tc.RFS(
+            np.ones(s_gen_shape).astype('float32'),
+            np.zeros((1, self.n_t)).astype('float32'),
+            np.zeros((1, self.n_t)).astype('float32'))
         G = (1. / Ips.max()).astype('float32')
         self.tc.set_gain_factor(G)
 
-    def init_particle_filter(self):
+    def init_particle_filter(self, motion_prior):
         """
         Initializes the particle filter class
-        Requires spikes to already be generated
         """
         # Define necessary components for the particle filter
-        if self.motion_prior == 'PositionDiffusion':
+        if motion_prior['mode'] == 'PositionDiffusion':
             # Diffusion
+            dc_infer = motion_prior['dc']
             D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
-            sdev = np.sqrt(self.dc_infer * self.dt / 2) * np.ones((D_H,))
+            sdev = np.sqrt(dc_infer * self.dt / 2) * np.ones((D_H,))
             ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
             tpd = pf.GaussTPD(D_H, self.n_n, sdev)
             ip = pf.GaussIP(D_H, sdev * 0.001)
             tp = pf.GaussTP(D_H, sdev)
             lp = PoissonLP(self.n_n, D_H, self.tc.spike_energy)
 
-        elif self.motion_prior == 'VelocityDiffusion':
+        elif motion_prior['mode'] == 'VelocityDiffusion':
             # FIXME: save these params
             D_H = 4   # Hidden state dim, x,y,vx,vy
-            v0 = 30.  # Initial Estimate for velocity
-            dcv = 6.  # Velocity Diffusion Constant
+
+            v0 = motion_prior['v0']  # Initial Estimate for velocity
+            dcv = motion_prior['dcv']  # Velocity Diffusion Constant
             st = np.sqrt(dcv * self.dt)
+            adj = np.sqrt(1 - st ** 2 / v0 ** 2)
 
             eps = 0.00001  # Small number since cannot have exact zero
             sigma0 = np.array([eps, eps, v0, v0])  # Initial sigmas
@@ -290,52 +303,33 @@ class EMBurak(object):
 
             # Transition matrix
             A = np.array([[1, 0, self.dt, 0],
-                          [0, 1, 0, self.dt],
-                          [0, 0, 1, 0],
-                          [0, 0, 0, 1]])
+                          [0, 1, 0,       self.dt],
+                          [0, 0, adj,     0],
+                          [0, 0, 0,       adj]])
 
             ipd = pf.GaussIPD(D_H, self.n_n, sigma0)
             tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A=A)
             ip = pf.GaussIP(D_H, sigma0)
             tp = pf.GaussTP(D_H, sigma_t, A=A)
-            lp = PoissonLP(self.n_n, D_H, self.l0, self.l1,
-                           self.dt, self.G, self.spike_energy)
+            lp = PoissonLP(self.n_n, D_H, self.tc.spike_energy)
+            # Note trick where PoissonLP takes 0,1 components of the
+            # hidden state which is the same for both cases
 
         else:
             raise ValueError(
                 'Unrecognized Motion Prior ' + str(self.motion_prior))
 
+        R = np.zeros((self.n_n, self.n_t)).astype('float32')
         self.pf = pf.ParticleFilter(ipd, tpd, ip, tp, lp,
-                                    self.R.transpose(), self.n_p)
-
-    def gen_spikes(self):
-        """
-        Generate LGN responses given the path and the image
-        """
-        self.R[:, :] = self.tc.spikes(self.s_gen, self.XR, self.YR)[0]
-        print 'Mean firing rate ' + str(self.R.mean() / self.dt)
-
-    def true_costs(self):
-        """
-        Prints out the negative log-likelihood of the observed spikes given the
-            image and path that generated them
-        Note that the energy is normalized by the number of timesteps
-        """
-        print 'Pre-EM testing'
-        out = self.tc.costs(self.XR, self.YR, self.R, self.Wbt)
-        E, E_bound, E_R, E_rec, E_sp = out
-        print ('Costs of underlying data ' +
-               str((E / self.n_t, E_rec / self.n_t)))
+                                    R.transpose(), self.n_p)
 
     def reset(self):
         """
         Resets the class between EM runs
         """
-        self.pf.reset()
-        # self.c.reset()
         self.data = {}
-        self.tc.reset_image_estimate()
-        self.tc.reset_m_aux()
+        self.pf.reset()
+        self.tc.reset()
 
     def run_E(self, t):
         """
@@ -352,94 +346,120 @@ class EMBurak(object):
             self.pf.advance()
         self.pf.calculate_means_sdevs()
 
-        print 'Path SNR ' + str(SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
+        # print 'Path SNR ' + str(SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
 
-    def run_M(self, t, N_g_itr=5):
+    def run_M(self, t0, tf, R, N_g_itr=5):
         """
         Runs the maximization step for the first t time steps
         resets the values of auxillary gradient descent variables at start
         t - number of time steps
         result is saved in t_A.get_value()
         """
-        self.tc.reset_m_aux()
-        print ('Total Energy / t | Bound. Energy / t ' +
-               '| Spike Energy / t | + Sparse E / t |  SNR')
+        self.tc.init_m_aux()
+        self.tc.update_Ap()
+
+        desc = ''
+        for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
+            desc += '    {:<6} |'.format(item)
+        desc += ' / Delta t | SNR'
+        print desc
+
         fista_l = self.tc.calculate_L(
-            t, self.n_n, self.l0, self.l1, self.dt, self.d_scl, self.fista_c)
+            tf, self.n_n, self.l0, self.l1, self.dt, self.fista_c)
 
+        XR = self.pf.XS[t0:tf, :, 0].transpose()
+        YR = self.pf.XS[t0:tf, :, 1].transpose()
+        W = self.pf.WS[t0:tf].transpose()
+        R_ = R[:, t0:tf]
         for v in range(N_g_itr):
-            out = self.tc.img_grad(
-                self.pf.XS[0:t, :, 0].transpose(),
-                self.pf.XS[0:t, :, 1].transpose(),
-                self.R[:, 0:t], self.pf.WS[0:t].transpose(),
-                fista_l)
-            self.img_SNR = SNR(self.s_gen, self.tc.image_est())
+            Es = self.tc.run_fista_step(XR, YR, R_, W, fista_l)
+            self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
+            if v == 0:
+                Es0 = Es
+            dEs = [Ei - E0 for Ei, E0 in zip(Es, Es0)]
+            print self.get_cost_string(dEs, tf-t0) + str(self.img_SNR)
 
-            print self.print_costs(out, t) + str(self.img_SNR)
+        self.tc.update_HB(XR, YR, W)
+        print 'The hessian trace is {}'.format(
+            np.trace(self.tc.t_H.get_value()))
 
     @staticmethod
-    def print_costs(out, t):
+    def get_cost_string(Es, t):
         """
         Prints costs given output of img_grad
         Cost divided by the number of timesteps
-        out - tuple containing the differet costs
+        Es - tuple containing the differet costs
         t - number to timesteps
         """
         strg = ''
-        for item in out:
-            strg += str(item / t) + ' '
+        for item in Es:
+            strg += '{:011.7f}'.format(item / t) + ' '
         return strg
 
-    def run_EM(self):
+    def run_EM(self, R):
         """
         Runs full expectation maximization algorithm
         self.N_itr - number of iterations of EM
         self.N_g_itr - number of gradient steps in M step
         Saves summary of run info in self.data
         Note running twice will overwrite this run info
+
+        Parameters
+        ----------
+        R : array, shape (n_n, n_t)
+            Spike train to decode
         """
-        self.tc.reset_image_estimate()
+        self.tc.reset()
 
         EM_data = {}
 
-        print '\n' + 'Running full EM'
+        print 'Running full EM'
 
         for u in range(self.n_itr):
-            t = self.n_t * (u + 1) / self.n_itr
-            print ('\n' + 'Iteration number ' + str(u) +
-                   ' Running up time = ' + str(t))
+            t0 = self.n_t * u / self.n_itr
+            tf = self.n_t * (u + 1) / self.n_itr
+            print (
+                '\nIteration number {} Running up to time {}'.format(u, tf))
 
-            # Run E step
-            self.run_E(t)
+            self.run_E(tf)
 
-            # Run M step
-            if u <= 2:
-                c = 4
-            else:
-                c = 1
-            self.run_M(t, N_g_itr=self.n_g_itr * c)
+            c = 4  # if u <= 2 else 2
+            self.run_M(t0, tf, R, N_g_itr=self.n_g_itr * c)
 
-            iteration_data = {'time_steps': t, 'path_means': self.pf.means,
-                              'path_sdevs': self.pf.sdevs,
-                              'image_est': self.tc.image_est(),
-                              'coeff_est': self.tc.get_A()}
+            iteration_data = {
+                'time_steps': tf, 'path_means': self.pf.means,
+                'path_sdevs': self.pf.sdevs,
+                'image_est': self.tc.image_est(),
+                'coeff_est': self.tc.get_A()}
 
             EM_data[u] = iteration_data
 
         if self.save_mode:
             self.data['EM_data'] = EM_data
 
-    def init_output_dir(self):
+    def init_output_dir(self, output_dir_base):
         """
-        Create an output directory
+        Create the output directory: output/output_dir_base
+
+        Parameters
+        ----------
+        output_dir_base : str
+
+        Returns
+        -------
+        output_dir : str
+            Output directory
         """
+        if output_dir_base is None:
+            output_dir_base = time_string()
+        output_dir = os.path.join('output/', output_dir_base)
         if not os.path.exists('output'):
             os.mkdir('output')
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        return output_dir
 
-        if not os.path.exists(self.output_dir):
-            os.mkdir(self.output_dir)
-
-    def build_param_and_data_dict(self):
+    def build_param_and_data_dict(self, s_gen, XR, YR, R):
         """
         Creates a dictionary, self.data, that has all of the parameters
             of the model
@@ -447,30 +467,32 @@ class EMBurak(object):
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
         self.data = {'DT': self.dt,
-                     'DC_gen': self.dc_gen,
-                     'DC_infer': self.dc_infer,
+                     # 'motion_prior': self.motion_prior,
+                     # 'motion_gen': self.motion_gen,
                      'L0': self.l0,
                      'L1': self.l1,
                      'GAMMA': self.gamma,
                      'lamb': self.lamb,
-                     'D': self.d,
+                     'D': self.tc.t_D.get_value(),
                      'N_L': self.n_l,
-                     'a': self.a,
                      'N_T': self.n_t,
                      'L_I': self.l_i,
                      'L_N': self.l_n,
                      'N_g_itr': self.n_g_itr,
                      'N_itr': self.n_itr,
                      'N_P': self.n_p,
-                     'XS': self.XS, 'YS': self.YS,
-                     'XE': self.XE, 'YE': self.YE,
-                     'Var': self.Var,
+                     'XS': self.tc.t_XS.get_value(),
+                     'YS': self.tc.t_YS.get_value(),
+                     'XE': self.tc.t_XE.get_value(),
+                     'YE': self.tc.t_YE.get_value(),
+                     'Var': self.tc.t_Var.get_value(),
                      'G': self.tc.t_G.get_value(),
-                     'XR': self.XR, 'YR': self.YR,
-                     'IE': self.IE,
+                     'tau': self.tau,
+                     'XR': XR, 'YR': YR,
+                     'IE': self.tc.t_IE.get_value(),
                      'actual_motion_mode': self.pg.mode(),
-                     'S_gen': self.s_gen, 'S_gen_name': self.s_gen_name,
-                     'R': self.R,
+                     'S_gen': s_gen, 'S_gen_name': self.s_gen_name,
+                     'R': R,
                      'Ips': self.Ips, 'FP': self.FP,
                      'motion_prior': self.motion_prior}
 
@@ -489,33 +511,42 @@ class EMBurak(object):
         pkl.dump(self.data, open(fn, 'wb'))
         return fn
 
-    def calculate_inner_products(self):
+    def calculate_inner_products(self, s_gen, XR, YR):
         """
         Calculates the inner products used
         """
-        self.Ips, self.FP = self.tc.RFS(self.s_gen, self.XR, self.YR)
+        self.Ips, self.FP = self.tc.RFS(s_gen, XR, YR)
 
+    """ Debug methods """
     def get_hessian(self):
         return self.tc.hessian_func(
             self.pf.XS[:, :, 0].transpose(),
             self.pf.XS[:, :, 1].transpose(),
             self.pf.WS[:].transpose())
 
-    def get_costs(self):
+    def get_spike_cost(self, R):
         return self.tc.costs(
             self.pf.XS[:, :, 0].transpose(),
             self.pf.XS[:, :, 1].transpose(),
-            self.R,
-            self.pf.WS[:].transpose())
-
-    def get_spike_cost(self):
-        return self.tc.costs(
-            self.pf.XS[:, :, 0].transpose(),
-            self.pf.XS[:, :, 1].transpose(),
-            self.R,
+            R,
             self.pf.WS[:].transpose())[2]
 
+# from utils.gradient_checker import hessian_check
 
+# def f(A):
+#     emb.tc.t_A.set_value(A.astype('float32'))
+#     return emb.get_spike_cost()
+
+
+# def fpp(A):
+#     emb.tc.t_A.set_value(A.astype('float32'))
+#     return emb.get_hessian()
+
+# x0 = emb.tc.get_A()
+
+# for _ in range(2):
+#     u, v = hessian_check(f, fpp, (D.shape[0],), x0=x0)
+#     print u, v
 
 
 # def true_path_infer_image_costs(self, N_g_itr = 10):

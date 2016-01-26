@@ -6,19 +6,137 @@ import theano.tensor as T
 from utils.fista import fista_updates
 
 
+def reset_shared_var(t_S):
+    """
+    Reset the value of a theano shared variable to all zeros
+    t_S - shared theano variable
+    """
+    t_S.set_value(np.zeros_like(t_S.get_value()).astype('float32'))
+
+
+def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
+    """
+    Take dot product of image with an array of gaussians
+    t_S - image variable shape - (i2, i1)
+    t_Var - variances of receptive fields
+    t_XS - X coordinate for image pixels for dimension i1
+    t_YS - Y coordinate for image pixels for dimension i2
+    t_XE - X coordinate for receptive fields j
+    t_YE - Y coordinate for receptive fields j
+    t_XR - X coordinate for retina in form batch, timestep, b,t
+    t_YR - Y coordinate ''
+
+    Returns
+    t_Ips - Inner products btw image and filters: b, j, t
+    t_PixRFCoupling - d Ips / dS: b, i2, i1, j, t
+    """
+
+    # Note in this computation, we do the indices in this form:
+    #  b, i, j, t
+    #  batch, pixel, neuron, time step
+
+    # indices: b, i1, j, t
+    t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x') -
+            t_XE.dimshuffle('x', 'x', 0, 'x') -
+            t_XR.dimshuffle(0, 'x', 'x', 1))
+    t_dX.name = 'dX'
+    # indices: b, i2, j, t
+    t_dY = (t_YS.dimshuffle('x', 0, 'x', 'x') -
+            t_YE.dimshuffle('x', 'x', 0, 'x') -
+            t_YR.dimshuffle(0, 'x', 'x', 1))
+    t_dY.name = 'dY'
+
+    # Use outer product trick to dot product image with point filters
+    t_PixRFCouplingX = T.exp(-0.5 * t_dX ** 2 /
+                             t_Var.dimshuffle('x', 0, 'x', 'x'))
+    t_PixRFCouplingY = T.exp(-0.5 * t_dY ** 2 /
+                             t_Var.dimshuffle('x', 0, 'x', 'x'))
+    t_PixRFCouplingX.name = 'PixRFCouplingX'
+    t_PixRFCouplingY.name = 'PixRFCouplingY'
+
+    # Matrix of inner products between the images and the retinal RFs
+    # indices: b, j, t
+    # Sum_i2 T(i2, i1) * T(b, i2, j, t) = T(b, i1, j, t)
+    t_IpsY = T.sum(t_S.dimshuffle('x', 0, 1, 'x', 'x') *
+                   t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3),
+                   axis=1)
+    # Sum_i1 T(b, i1, j, t) * T(b, i2, j, t) = T(b, j, t)
+    t_Ips = T.sum(t_IpsY * t_PixRFCouplingX, axis=1)
+    t_Ips.name = 'Ips'
+
+    # For the gradient, we also prepare d Ips / dS
+    # This is in the form b, i2, i1, j, t
+    t_PixRFCoupling = (t_PixRFCouplingX.dimshuffle(0, 'x', 1, 2, 3) *
+                       t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3))
+
+    return t_Ips, t_PixRFCoupling
+
+
+def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
+    # Firing probabilities indexed by b, j, t
+    # t_Ips - Image-RF inner products indexed as b, j, t
+    # t_G - gain constant
+    # t_IE - identity of retinal ganglion cells
+    # t_L0, t_L1 - min, max firing rate
+    # t_DT - time step size
+
+    t_IEr = t_IE.dimshuffle('x', 0, 'x')
+    t_Gen = t_IEr + (1 - 2 * t_IEr) * t_G * t_Ips  # Generator signal
+
+    t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
+
+    t_FP = t_FP_0
+    return t_FP
+
+
+def dlogfp_dA(t_dIpsdA, t_G, t_IE, t_L0, t_L1):
+    """
+    t_dIpsdA - d Ips / dA indexed as b, k, j, t
+    t_G - gain constant
+    t_IE - RGC identity, j
+    t_L0, t_L1 - min, max firing rates
+    Returns the d log FP / dA indexed b, k, j, t
+
+    """
+    t_IEr = t_IE.dimshuffle('x', 'x', 0, 'x')
+    # t_dGen_dA = t_IEr + (1 - 2 * t_IEr) * t_G * t_dIpsdA
+    t_dGen_dA = (1 - 2 * t_IEr) * t_G * t_dIpsdA
+    t_dlogFPdA = T.log(t_L1 / t_L0) * t_dGen_dA
+
+    return t_dlogFPdA
+
+
+def spiking_cost(t_R, t_FP):
+    """
+    Returns the negative log likelihood of the spikes given
+    the inner products
+    t_R - spikes in form j, t
+    t_FP - Firing probabilities in form b, j, t
+    Returns -log p(R|X,S) with indices in the form b, j, t
+    """
+    #            t_E_R_f = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP)
+    #         + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
+    #         Try using poisson loss instead of bernoulli loss
+    t_E_R_f = -t_R.dimshuffle('x', 0, 1) * T.log(t_FP) + t_FP
+
+    t_E_R_f.name = 'E_R_f'
+
+    return t_E_R_f
+
+
 class TheanoBackend(object):
 
     """
     Theano backend for executing the computations
     """
 
-    def __init__(self, XS, YS, XE, YE, IE, Var, A0, H0, d,
-                 l0, l1, DT, G, GAMMA, LAMBDA, pos_only=True):
+    def __init__(self, XS, YS, XE, YE, IE, Var, d,
+                 l0, l1, DT, G, GAMMA, LAMBDA, TAU, pos_only=True):
         """
         Initializes all theano variables and functions
         """
         self.l_i = XS.shape[0]
-        self.n_l = A0.shape[0]
+        self.n_l = d.shape[0]
 
         # Define Theano Variables Common to Generation and Inference
         self.t_XS = theano.shared(XS, 'XS')
@@ -37,95 +155,7 @@ class TheanoBackend(object):
         self.t_L1 = theano.shared(np.float32(l1), 'L1')
         self.t_DT = theano.shared(np.float32(DT), 'DT')
         self.t_G = theano.shared(np.float32(G), 'G')
-
-        def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
-            """
-            Take dot product of image with an array of gaussians
-            t_S - image variable shape - (i2, i1)
-            t_Var - variances of receptive fields
-            t_XS - X coordinate for image pixels for dimension i1
-            t_YS - Y coordinate for image pixels for dimension i2
-            t_XE - X coordinate for receptive fields j
-            t_YE - Y coordinate for receptive fields j
-            t_XR - X coordinate for retina in form batch, timestep, b,t
-            t_YR - Y coordinate ''
-
-            Returns
-            t_Ips - Inner products btw image and filters: b, j, t
-            t_PixRFCoupling - d Ips / dS: b, i2, i1, j, t
-            """
-
-            # Note in this computation, we do the indices in this form:
-            #  b, i, j, t
-            #  batch, pixel, neuron, time step
-
-            # indices: b, i1, j, t
-            t_dX = (t_XS.dimshuffle('x', 0, 'x', 'x') -
-                    t_XE.dimshuffle('x', 'x', 0, 'x') -
-                    t_XR.dimshuffle(0, 'x', 'x', 1))
-            t_dX.name = 'dX'
-            # indices: b, i2, j, t
-            t_dY = (t_YS.dimshuffle('x', 0, 'x', 'x') -
-                    t_YE.dimshuffle('x', 'x', 0, 'x') -
-                    t_YR.dimshuffle(0, 'x', 'x', 1))
-            t_dY.name = 'dY'
-
-            # Use outer product trick to dot product image with point filters
-            t_PixRFCouplingX = T.exp(-0.5 * t_dX ** 2 /
-                                     t_Var.dimshuffle('x', 0, 'x', 'x'))
-            t_PixRFCouplingY = T.exp(-0.5 * t_dY ** 2 /
-                                     t_Var.dimshuffle('x', 0, 'x', 'x'))
-            t_PixRFCouplingX.name = 'PixRFCouplingX'
-            t_PixRFCouplingY.name = 'PixRFCouplingY'
-
-            # Matrix of inner products between the images and the retinal RFs
-            # indices: b, j, t
-            # Sum_i2 T(i2, i1) * T(b, i2, j, t) = T(b, i1, j, t)
-            t_IpsY = T.sum(t_S.dimshuffle('x', 0, 1, 'x', 'x') *
-                           t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3),
-                           axis=1)
-            # Sum_i1 T(b, i1, j, t) * T(b, i2, j, t) = T(b, j, t)
-            t_Ips = T.sum(t_IpsY * t_PixRFCouplingX, axis=1)
-            t_Ips.name = 'Ips'
-
-            # For the gradient, we also prepare d Ips / dS
-            # This is in the form b, i2, i1, j, t
-            t_PixRFCoupling = (t_PixRFCouplingX.dimshuffle(0, 'x', 1, 2, 3) *
-                               t_PixRFCouplingY.dimshuffle(0, 1, 'x', 2, 3))
-
-            return t_Ips, t_PixRFCoupling
-
-        def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
-            # Firing probabilities indexed by b, j, t
-            # t_Ips - Image-RF inner products indexed as b, j, t
-            # t_G - gain constant
-            # t_IE - identity of retinal ganglion cells
-            # t_L0, t_L1 - min, max firing rate
-            # t_DT - time step size
-
-            t_IEr = t_IE.dimshuffle('x', 0, 'x')
-            t_Gen = t_IEr + (1 - 2 * t_IEr) * t_G * t_Ips  # Generator signal
-
-            t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
-
-            t_FP = t_FP_0
-            return t_FP
-
-        def dlogfp_dA(t_dIpsdA, t_G, t_IE, t_L0, t_L1):
-            """
-            t_dIpsdA - d Ips / dA indexed as b, k, j, t
-            t_G - gain constant
-            t_IE - RGC identity, j
-            t_L0, t_L1 - min, max firing rates
-            Returns the d log FP / dA indexed b, k, j, t
-
-            """
-            t_IEr = t_IE.dimshuffle('x', 'x', 0, 'x')
-            # t_dGen_dA = t_IEr + (1 - 2 * t_IEr) * t_G * t_dIpsdA
-            t_dGen_dA = (1 - 2 * t_IEr) * t_G * t_dIpsdA
-            t_dlogFPdA = T.log(t_L1 / t_L0) * t_dGen_dA
-
-            return t_dlogFPdA
+        self.t_TAU = theano.shared(np.float32(TAU), 'TAU')
 
         ##############################
         # Simulated Spike Generation #
@@ -157,33 +187,33 @@ class TheanoBackend(object):
         # Latent Variable Estimation #
         ##############################
 
-        def spiking_cost(t_R, t_FP):
-            """
-            Returns the negative log likelihood of the spikes given
-            the inner products
-            t_R - spikes in form j, t
-            t_FP - Firing probabilities in form b, j, t
-            Returns -log p(R|X,S) with indices in the form b, j, t
-            """
-            #            t_E_R_f = -(t_R.dimshuffle('x', 0, 1) * T.log(t_FP)
-            #         + (1 - t_R.dimshuffle('x', 0, 1)) * T.log(1 - t_FP))
-            #         Try using poisson loss instead of bernoulli loss
-            t_E_R_f = -t_R.dimshuffle('x', 0, 1) * T.log(t_FP) + t_FP
-
-            t_E_R_f.name = 'E_R_f'
-
-            return t_E_R_f
-
         self.spiking_cost = spiking_cost
 
-        self.t_A = theano.shared(A0, 'A')
-        self.t_D = theano.shared(d, 'D')
-        self.t_S = T.dot(self.t_A, self.t_D).reshape((self.l_i, self.l_i))
-        self.image_est = theano.function(inputs=[], outputs=self.t_S)
-        # FIXME: shouldn't access L_I, Image dims are i2, i1
+        # Current value of A
+        self.t_A = theano.shared(
+            np.zeros((self.n_l,)).astype('float32'), 'A')
+        # Previous value of A
+        self.t_Ap = theano.shared(
+            np.zeros((self.n_l,)).astype('float32'), 'Ap')
+
+        self.t_D = theano.shared(d, 'D')  # Dictionary
+
+        self.t_Wbt = T.matrix('Wbt')  # Weights (b,t) from particle filter
+
+        # Sum of Hessians
+        self.t_H = theano.shared(
+            np.zeros((self.n_l, self.n_l)).astype('float32'), 'H')
+        self.t_B = theano.shared(
+            np.zeros((self.n_l,)).astype('float32'), 'B')  # Prior Bias
+
+        # Constants
 
         self.t_GAMMA = theano.shared(np.float32(GAMMA), 'GAMMA')
         self.t_LAMBDA = theano.shared(np.float32(LAMBDA), 'LAMBDA')
+
+        # Calculate Firing rate
+        self.t_S = T.dot(self.t_A, self.t_D).reshape((self.l_i, self.l_i))
+        self.image_est = theano.function(inputs=[], outputs=self.t_S)
 
         self.t_Ips, t_PixRFCoupling = inner_products(
             self.t_S, self.t_Var, self.t_XS, self.t_YS,
@@ -192,9 +222,36 @@ class TheanoBackend(object):
         self.t_FP = firing_prob(self.t_Ips, self.t_G, self.t_IE,
                                 self.t_L0, self.t_L1, self.t_DT)
 
+        # Define Hessian
+        # Reshape dictionary for computing derivative: k, i2, i1
+        t_Dp = self.t_D.reshape((self.n_l, self.l_i, self.l_i))
+
+        # Compute dc/dA = dc/dS * ds/dA
+        # b, i2, i1, j, t -> b, _, i2, i1, j, t
+        # k, i2, i1 -> _, k, i2, i1, _, _
+        # b, k, j, t
+        t_SpRFCoupling = (
+            t_PixRFCoupling.dimshuffle(0, 'x', 1, 2, 3, 4) *
+            t_Dp.dimshuffle('x', 0, 1, 2, 'x', 'x')).sum(axis=(2, 3))
+
+        # b, k, j, t
+        t_dlogFPdA = dlogfp_dA(
+            t_SpRFCoupling, self.t_G, self.t_IE, self.t_L0, self.t_L1)
+
+        # b, k, k', j, t -> k, k'
+        t_dE_R_dAA = (
+            self.t_Wbt.dimshuffle(0, 'x', 'x', 'x', 1) *
+            t_dlogFPdA.dimshuffle(0, 'x', 1, 2, 3) *
+            t_dlogFPdA.dimshuffle(0, 1, 'x', 2, 3) *
+            self.t_FP.dimshuffle(0, 'x', 'x', 1, 2)
+        ).sum(axis=(0, 3, 4))
+
+        self.t_dlogFPdA = t_dlogFPdA
+        self.t_dE_R_dAA = t_dE_R_dAA
+
         # Compute Energy Functions (negative log-likelihood) to minimize
-        # Weights (batch, timestep) from particle filter
-        self.t_Wbt = T.matrix('Wbt')
+
+        # Spiking cost separated by b, j, t
         self.t_E_R_f = spiking_cost(self.t_R, self.t_FP)
 
         self.t_E_R = T.sum(T.sum(self.t_E_R_f, axis=1) * self.t_Wbt)
@@ -208,7 +265,20 @@ class TheanoBackend(object):
         self.t_E_sp = self.t_LAMBDA * T.sum(T.abs_(self.t_A))
         self.t_E_sp.name = 'E_sp'
 
-        self.t_E_rec = self.t_E_R + self.t_E_bound
+        # Define bias term
+        t_dPrior = T.grad(self.t_E_sp, self.t_A)
+
+        self.t_E_prev = (
+            (self.t_A - self.t_Ap).dimshuffle('x', 0) *
+            self.t_H *
+            (self.t_A - self.t_Ap).dimshuffle(0, 'x')
+        ).sum() * 0.5
+
+        self.t_E_lin_prior = ((self.t_A - self.t_Ap) * self.t_B).sum()
+
+        # Split off terms that will go into fista (i.e. not icluding E_sp)
+        self.t_E_rec = (self.t_E_prev + self.t_E_R +
+                        self.t_E_lin_prior + self.t_E_bound)
         self.t_E_rec.name = 'E_rec'
 
         self.t_E = self.t_E_rec + self.t_E_sp
@@ -216,24 +286,23 @@ class TheanoBackend(object):
 
         # Cost from poisson terms separated by batches for particle filter log
         # probability
-        self.t_E_R_b = T.sum(self.t_E_R_f, axis=(1, 2))
+        self.t_E_R_pf = T.sum(self.t_E_R_f, axis=(1, 2))
         self.spike_energy = theano.function(
             inputs=[self.t_XR, self.t_YR, self.t_R],
-            outputs=self.t_E_R_b)
+            outputs=self.t_E_R_pf)
 
         # Generate costs given a path, spikes, and time-batch weights
-        energy_outputs = [self.t_E, self.t_E_bound, self.t_E_R, self.t_E_sp]
+        energy_outputs = [
+            self.t_E,
+            self.t_E_prev,
+            self.t_E_R,
+            self.t_E_bound,
+            self.t_E_sp,
+            self.t_E_lin_prior]
+
         self.costs = theano.function(
             inputs=[self.t_XR, self.t_YR, self.t_R, self.t_Wbt],
             outputs=energy_outputs)
-
-        # Define theano variables for gradient descent
-        # self.t_Rho = T.scalar('Rho')
-        # self.t_Eps = T.scalar('Eps')
-        # self.t_ada_params = (self.t_Rho, self.t_Eps)
-
-        # self.grad_updates = ada_delta(self.t_E, self.t_A, *self.t_ada_params)
-        # self.t_A_Eg2, self.t_A_EdS2, _ = self.grad_updates.keys()
 
         # Define variables for FISTA minimization
         self.t_L = T.scalar('L')
@@ -247,47 +316,36 @@ class TheanoBackend(object):
         # Initialize t_A, and extra variables
 
         inputs = [self.t_XR, self.t_YR, self.t_R, self.t_Wbt, self.t_L]
-        self.img_grad = theano.function(inputs=inputs,
-                                        outputs=energy_outputs,
-                                        updates=self.grad_updates)
+        self.run_fista_step = theano.function(
+            inputs=inputs, outputs=energy_outputs,
+            updates=self.grad_updates)
 
-        # Define Hessian:
-        t_Dp = self.t_D.reshape((self.n_l, self.l_i, self.l_i))  # k, i2, i1
-
-        # b, i2, i1, j, t -> b, _, i2, i1, j, t
-        # k, i2, i1 -> _, k, i2, i1, _, _
-        # b, k, j, t
-        t_SpRFCoupling = (
-            t_PixRFCoupling.dimshuffle(0, 'x', 1, 2, 3, 4) *
-            t_Dp.dimshuffle('x', 0, 1, 2, 'x', 'x')).sum(axis=(2, 3))
-
-        # b, k, j, t
-        t_dlogFPdA = dlogfp_dA(
-            t_SpRFCoupling, self.t_G, self.t_IE, self.t_L0, self.t_L1)
-
-        # b, k, k', j, t -> k, k'
-        t_E_R_AA = (
-            self.t_Wbt.dimshuffle(0, 'x', 'x', 'x', 1) *
-            t_dlogFPdA.dimshuffle(0, 'x', 1, 2, 3) *
-            t_dlogFPdA.dimshuffle(0, 1, 'x', 2, 3) *
-            self.t_FP.dimshuffle(0, 'x', 'x', 1, 2)
-            ).sum(axis=(0, 3, 4))
+        # Define functions for online learning #
 
         self.hessian_func = theano.function(
             inputs=[self.t_XR, self.t_YR, self.t_Wbt],
-            outputs=t_E_R_AA)
+            outputs=t_dE_R_dAA)
 
-        # Define variables for online learning
+        # After each iteration, replace value of Ap with A
+        self.update_Ap = theano.function(
+            inputs=[], updates=[(self.t_Ap, self.t_A)])
 
-        self.t_Ap = theano.shared(A0, 'Ap')  # Previous value of A
-        self.t_H = theano.shared(H0, 'H')  # Previous value of hessian
+        t_decay = T.exp(- self.t_DT / self.t_TAU *
+                        self.t_XR.shape[1].astype('float32'))
 
-        t_E_prev = (
-            0.5 *
-            (self.t_A - self.t_Ap).dimshuffle('x', 0) *
-            self.t_H *
-            (self.t_A - self.t_Ap).dimshuffle(0, 'x')
-            ).sum()
+        self.update_HB = theano.function(
+            inputs=[self.t_XR, self.t_YR, self.t_Wbt],
+            updates=[
+                (self.t_H, t_decay * self.t_H + t_dE_R_dAA),
+                (self.t_B, t_dPrior)])
+
+    def reset_hessian_and_bias(self):
+        """
+        Reset the values of the hessian term and the bias term to
+            zero to reset the
+        """
+        reset_shared_var(self.t_H)
+        reset_shared_var(self.t_B)
 
     def set_gain_factor(self, g):
         self.t_G.set_value(g)
@@ -295,14 +353,22 @@ class TheanoBackend(object):
     def get_A(self):
         return self.t_A.get_value()
 
+    def reset(self):
+        """
+        Resets all shared variables changed during the optimization
+        """
+        self.reset_image_estimate()
+        self.init_m_aux()
+        self.reset_hessian_and_bias()
+
     def reset_image_estimate(self):
         """
         Resets the value of the image as stored on the GPU
         """
-        self.t_A.set_value(
-            np.zeros_like(self.t_A.get_value()).astype('float32'))
+        reset_shared_var(self.t_A)
+        reset_shared_var(self.t_Ap)
 
-    def calculate_L(self, n_t, n_n, l0, l1, dt, d_scl, ctant):
+    def calculate_L(self, n_t, n_n, l0, l1, dt, ctant):
         """
         Return the value of the Lipschitz constant of the smooth part
             of the cost function
@@ -319,15 +385,14 @@ class TheanoBackend(object):
             maximum firing rate
         dt : float
             timestep
-        d_scl : float
-            scale of dictionary elements (mean sum of squares)
         ctant : float
             constant to loosen our bound
         """
+        d_scl = np.sqrt((self.t_D.get_value() ** 2).sum(1).mean())
         return (n_t * n_n * l1 * dt * d_scl ** 2 *
                 np.log(l1 / l0) ** 2 * ctant).astype('float32')
 
-    def reset_m_aux(self):
+    def init_m_aux(self):
         """
         Resets auxillary gradient descent variables for the M step
             eg. fista we reset the copy of A and the step size

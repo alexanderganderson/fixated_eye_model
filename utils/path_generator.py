@@ -136,8 +136,7 @@ class ExperimentalPathGenerator(PathGenerator):
         q = np.random.randint(self.N_runs)
         st = np.random.randint(self.N_T_data - self.N_T)
         pat = self.paths[q, st:(st + self.N_T), :].transpose()
-        pat[0] = pat[0] - pat[0][0]
-        pat[1] = pat[1] - pat[1][0]
+        pat = pat - pat[:, 0:1]
         return pat
 
     def mode(self):

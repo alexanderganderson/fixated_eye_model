@@ -67,7 +67,7 @@ class DataAnalyzer:
         self.DC_gen = self.data['DC_gen']
         self.DC_infer = self.data['DC_infer']
         self.L_I = self.data['L_I']
-        self.LAMBDA = self.data['LAMBDA']
+        self.LAMBDA = self.data['lamb']
         self.R = self.data['R']
         self.L_N = self.data['L_N']
 
@@ -433,6 +433,18 @@ class DataAnalyzer:
         plt.title('Firing rate as a function of Stimulus Intensity')
         plt.legend()
 
+    def save_EM_jpgs(self, output_dir, tag):
+        """
+        Saves the figures from plot_EM_estimate for all iterations
+        output_dir : str
+            String for the output directory
+        tag : str
+            String describing the run
+        """
+        for i in range(self.N_itr):
+            self.plot_EM_estimate(i)
+            plt.savefig(os.path.join(output_dir,
+                'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
 if __name__ == '__main__':
     fn = sys.argv[1]

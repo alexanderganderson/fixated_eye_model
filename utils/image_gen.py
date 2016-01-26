@@ -141,5 +141,44 @@ class ImageGenerator:
         plt.title('Image')
         plt.show()
 
+
+def rotated_e():
+    """
+    Returns
+    -------
+    img : array, shape (4, 5, 5)
+        A collection of four 5 by 5 images of all rotations of an E
+    """
+    x = np.zeros((5, 5))
+    x[:, 0] = 1.
+    y = np.zeros((5, 5))
+    y[:, 2] = 1.
+    z = np.zeros((5, 5))
+    z[:, 4] = 1.
+    a = np.zeros((5, 5))
+    a[0, :] = 1.
+    b = np.zeros((5, 5))
+    b[2, :] = 1.
+    c = np.zeros((5, 5))
+    c[4, :] = 1.
+
+    img = np.zeros((4, 5, 5))
+    img[0] = x + y + z + a
+    img[1] = x + y + z + c
+    img[2] = a + b + c + x
+    img[3] = a + b + c + z
+    img[img > 0] = 1.
+
+    return img.astype('float32')
+
+
+def show_es():
+    img = rotated_e()
+    for i in range(4):
+        plt.subplot(2, 2, i+1)
+        plt.imshow(img[i], cmap=plt.cm.gray, interpolation='nearest')
+    plt.show()
+
+
 if __name__ == '__main__':
     ig = ImageGenerator(14)
