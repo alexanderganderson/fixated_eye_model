@@ -304,6 +304,11 @@ class TheanoBackend(object):
             inputs=[self.t_XR, self.t_YR, self.t_R, self.t_Wbt],
             outputs=energy_outputs)
 
+        self.image_costs = theano.function(
+            inputs=[self.t_XR, self.t_YR, self.t_R,
+                    self.t_Wbt, self.t_S],
+            outputs=self.t_E_R)
+
         # Define variables for FISTA minimization
         self.t_L = T.scalar('L')
 

@@ -19,7 +19,8 @@ class EMBurak(object):
 
     def __init__(
         self, s_gen, d, motion_gen, motion_prior,
-        dt=0.001, n_t=50, l_n=14, ds=1., de=1., lamb=0.,
+        dt=0.001, n_t=50, l_n=14, neuron_layout='sqr',
+        ds=1., de=1., lamb=0.,
         tau=0.05, save_mode=False, n_itr=20, s_gen_name=' ',
         output_dir_base=''
     ):
@@ -53,6 +54,8 @@ class EMBurak(object):
             Number of timesteps of Simulation
         l_n : int
             Linear dimension of neuron array
+        neuron_layout : str
+            Either 'sqr' or 'hex' for a square or hexagonal grid
         lamb: float
             Strength of sparse prior
         save_mode : bool
@@ -111,6 +114,9 @@ class EMBurak(object):
         if not self.l_i ** 2 == n_pix:
             raise ValueError('Mismatch between dictionary and image size')
 
+        self.ds = ds
+        self.de = de
+
         # Image Prior Parameters
         self.gamma = 100.  # Pixel out of bounds cost parameter
         self.lamb = lamb  # the sparse prior is delta (S-DA) + lamb * |A|
@@ -126,10 +132,12 @@ class EMBurak(object):
         self.n_p = 15  # Number of particles for the EM
 
         (self.n_n, XE, YE, IE, XS, YS, neuron_mode
-         ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de)
+         ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de,
+                                      mode=neuron_layout)
 
         # Variances of Gaussians for each pixel
-        Var = 0.25 * (ds ** 2) * np.ones((self.l_i,)).astype('float32')
+        Var = np.ones((self.l_i,)).astype('float32') * (
+            (0.5 * ds) ** 2 + (0.203 * de) ** 2)
 
         self.tc = TheanoBackend(
             XS, YS, XE, YE, IE, Var,
@@ -155,7 +163,7 @@ class EMBurak(object):
 
         print 'Initialization done'
 
-    def gen_data(self, s_gen, pg=None):
+    def gen_data(self, s_gen, pg=None, print_mode=True):
         """
         Generates a path and spikes
         Builds a dictionary saving these data
@@ -187,7 +195,9 @@ class EMBurak(object):
         self.calculate_inner_products(s_gen, XR, YR)
 
         R = self.tc.spikes(s_gen, XR, YR)[0]
-        print 'The mean firing rate is {:.2f}'.format(R.mean() / self.dt)
+        if print_mode:
+            print 'The mean firing rate is {:.2f}'.format(
+                R.mean() / self.dt)
 
         self.pf.Y = R.transpose()  # Update reference to spikes for PF
         # TODO: EWW
@@ -252,8 +262,9 @@ class EMBurak(object):
         IE[0: n_n / 2] = 1
 
         # Position of pixels
-        XS = ds * np.arange(- l_i / 2, l_i / 2).astype('float32')
-        YS = ds * np.arange(- l_i / 2, l_i / 2).astype('float32')
+        tmp = np.arange(l_i) - (l_i - 1) / 2.
+        XS = ds * tmp.astype('float32')
+        YS = ds * tmp.astype('float32')
 
         return n_n, XE, YE, IE, XS, YS, mode
 
@@ -469,6 +480,8 @@ class EMBurak(object):
         self.data = {'DT': self.dt,
                      # 'motion_prior': self.motion_prior,
                      # 'motion_gen': self.motion_gen,
+                     'ds': self.ds,
+                     'de': self.de,
                      'L0': self.l0,
                      'L1': self.l1,
                      'GAMMA': self.gamma,
@@ -530,6 +543,27 @@ class EMBurak(object):
             self.pf.XS[:, :, 1].transpose(),
             R,
             self.pf.WS[:].transpose())[2]
+
+    def ideal_observer_cost(self, XR, YR, R, S):
+        """
+        Get p(R|X, S)
+
+        Parameters
+        ----------
+        R : array, shape (n_n, n_t)
+            Spikes
+        S : array, shape (l_i, l_i)
+            Image that generates the spikes
+        XR, YR: array, shape (1, n_t)
+            Locations of eye that generated data
+        Returns
+        -------
+        cost : float
+            -log p(R|X, S)
+        """
+        W = np.ones_like(XR)
+        return self.tc.image_costs(XR, YR, R, W, S)
+
 
 # from utils.gradient_checker import hessian_check
 

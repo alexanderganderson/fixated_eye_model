@@ -61,11 +61,11 @@ class DataAnalyzer:
         self.S_gen = self.data['S_gen']
         self.Var = self.data['Var'][0]
 
-        self.blur_sdev = float(np.sqrt(self.Var))
+        self.blur_sdev = float(np.sqrt(self.Var)) / self.data['ds']
 
         self.N_itr = self.data['N_itr']
-        self.DC_gen = self.data['DC_gen']
-        self.DC_infer = self.data['DC_infer']
+        # self.DC_gen = self.data['DC_gen']
+        # self.DC_infer = self.data['DC_infer']
         self.L_I = self.data['L_I']
         self.LAMBDA = self.data['lamb']
         self.R = self.data['R']
@@ -160,7 +160,7 @@ class DataAnalyzer:
         plt.plot(self.DT * np.arange(self.N_T),
                  path, label='actual')
         plt.xlabel('Time (s)')
-        plt.ylabel('Relative position (pixels)')
+        plt.ylabel('Relative position (arcmin)')
         # plt.legend()
         plt.title(label + ' Pos., shift = %.2f' % dxy)
 
@@ -238,8 +238,8 @@ class DataAnalyzer:
         t_ms = self.DT * n_time_steps * 1000.
 
         fig = plt.figure(figsize=(12, 8))
-        fig.suptitle('EM Reconstruction after t = %0.2f ms for DC_gen = %0.2f, LAMBDA = %0.2f' % (
-            t_ms, self.DC_gen, self.LAMBDA))
+        # fig.suptitle('EM Reconstruction after t = %0.2f ms for DC_gen = %0.2f, LAMBDA = %0.2f' % (
+        #     t_ms, self.DC_gen, self.LAMBDA))
 
         # Note actual image is convolved with a gaussian during the simulation
         #   even though the image saved has not has this happen yet
