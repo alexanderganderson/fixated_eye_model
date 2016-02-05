@@ -129,7 +129,7 @@ class EMBurak(object):
         self.tau = tau  # Decay constant for summing hessian
 
         # E Parameters (Particle Filter)
-        self.n_p = 15  # Number of particles for the EM
+        self.n_p = 40  # Number of particles for the EM
 
         (self.n_n, XE, YE, IE, XS, YS, neuron_mode
          ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de,
@@ -155,7 +155,7 @@ class EMBurak(object):
             raise ValueError(
                 'motion_gen[mode] must be Diffusion of Experiment')
 
-        self.init_particle_filter(motion_prior)
+        self.pf = self.init_particle_filter(motion_prior, self.n_p)
         self.motion_prior = motion_prior
 
         if self.save_mode:
@@ -283,9 +283,29 @@ class EMBurak(object):
         G = (1. / Ips.max()).astype('float32')
         self.tc.set_gain_factor(G)
 
-    def init_particle_filter(self, motion_prior):
+    def init_particle_filter(self, motion_prior, n_p):
         """
         Initializes the particle filter class
+
+        Parameters
+        ----------
+        motion_prior : dict
+            Dictionary containing:
+            'mode': str
+                either PositionDiffusion or VelocityDiffusion
+            dc : float
+                Position Diffusion Constant
+            dcv : float
+                Velocity Diffusion Constant
+            v0 : float
+                Initial velocity for Velocity Diffusion Model
+        n_p : int
+            Number of particles for particle filter
+
+        Returns
+        -------
+        pf : ParticleFilter
+            Instance of particle filter
         """
         # Define necessary components for the particle filter
         if motion_prior['mode'] == 'PositionDiffusion':
@@ -328,11 +348,11 @@ class EMBurak(object):
 
         else:
             raise ValueError(
-                'Unrecognized Motion Prior ' + str(self.motion_prior))
+                'Unrecognized Motion Prior ' + str(motion_prior))
 
         R = np.zeros((self.n_n, self.n_t)).astype('float32')
-        self.pf = pf.ParticleFilter(ipd, tpd, ip, tp, lp,
-                                    R.transpose(), self.n_p)
+        return pf.ParticleFilter(
+            ipd, tpd, ip, tp, lp, R.transpose(), n_p)
 
     def reset(self):
         """

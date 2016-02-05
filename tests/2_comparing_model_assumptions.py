@@ -49,7 +49,7 @@ modes = []
 # modes.append((motion_prior1, D0))
 
 # Motion Prior: diffusion, Image Prior: MNIST
-modes.append((motion_prior1, D1))
+# modes.append((motion_prior1, D1))
 
 # Motion Prior: velocity diffusion, Independent Pixels
 # modes.append((motion_prior2, D0))
