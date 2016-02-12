@@ -129,7 +129,7 @@ class EMBurak(object):
         self.tau = tau  # Decay constant for summing hessian
 
         # E Parameters (Particle Filter)
-        self.n_p = 40  # Number of particles for the EM
+        self.n_p = 20  # Number of particles for the EM
 
         (self.n_n, XE, YE, IE, XS, YS, neuron_mode
          ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de,
