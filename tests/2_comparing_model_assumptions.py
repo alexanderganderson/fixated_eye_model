@@ -62,7 +62,7 @@ modes.append((motion_prior2, D1))
 for motion_prior, D in modes:
     emb = EMBurak(
         s_gen, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
-        s_gen_name=s_gen_name, ds=0.8, neuron_layout='hex',
+        s_gen_name=s_gen_name, ds=0.57, neuron_layout='hex',
         de=1.09, l_n=6, n_itr=10, lamb=0.0, tau=0.05)
     for _ in range(10):
         XR, YR, R = emb.gen_data(s_gen, print_mode=False)
