@@ -54,7 +54,7 @@ class DataAnalyzer:
         self.data = data
 
         self.DT = self.data['DT']
-        self.N_T = self.data['N_T']
+        self.N_T = int(self.data['N_T'])
 
         self.XR = self.data['XR'][0]
         self.YR = self.data['YR'][0]
@@ -224,7 +224,8 @@ class DataAnalyzer:
 
         q - index of EM iteration to plot
         """
-
+        if q == -1:
+            q = self.N_itr - 1
 #        if (q >= self.N_itr):
 #            raise ValueError('Iteration index, q, is too large')
 
@@ -443,8 +444,61 @@ class DataAnalyzer:
         """
         for i in range(self.N_itr):
             self.plot_EM_estimate(i)
-            plt.savefig(os.path.join(output_dir,
+            plt.savefig(os.path.join(
+                output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
+
+    def plot_image_and_rfs(self, s=150):
+        _plot_image_and_rfs(
+            self.data['XE'], self.data['YE'], self.data['de'],
+            self.XS, self.YS, self.data['ds'],
+            self.data['XR'], self.data['YR'],
+            self.data['S_gen'], s)
+
+
+def _plot_image_and_rfs(XE, YE, de, XS, YS, ds, XR, YR, S_gen,
+                        s=150):
+    """
+    XE, YE: array, shape (n_n,)
+        Neuron RF centers
+    XS, YS: array, shape (l_i ** 2,)
+        Locations of pixel centers
+    XR, YR: array, shape (1, n_t)
+        Location of eye at time t
+    de, ds : float
+        Neuron, pixel spacing
+    S_gen : array, shape (l_i ** 2,)
+        Values of pixels
+    s : float
+        Size of markers for pixels in pix ** 2
+    """
+    plt.figure(figsize=(5, 5))
+    plt.scatter(XE, YE,
+                label='Neuron RF Centers, de={}'.format(de),
+                alpha=1.0)
+    plt.scatter(XS, -YS, c=S_gen.ravel(), cmap=plt.cm.gray_r,
+                label='Pixel Centers, ds={}'.format(ds), s=s, alpha=0.5)
+    plt.axes().set_aspect('equal')
+    if XR is not None and YR is not None:
+        plt.plot(XR[0, ::5], YR[0, ::5], label='Eye path', c='g')
+    plt.legend()
+
+
+def pf_plot(pf, t):
+    """
+    Plot the particles and associated weights of the particle filter
+    at a certain time. Weight is proportional to the area of the marker.
+
+    pf : Particle Filter
+        Particle filter class
+    t : int
+        Time point to plot the particles and weights
+    """
+    xx = pf.XS[t, :, 0]
+    yy = pf.XS[t, :, 1]
+    ww = pf.WS[t, :]
+    plt.scatter(xx, yy, s=ww * 5000)
+
 
 if __name__ == '__main__':
     fn = sys.argv[1]

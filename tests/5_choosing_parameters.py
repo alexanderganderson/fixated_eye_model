@@ -7,6 +7,7 @@
 # fista_c error on fista 2nd derivative uppper bound
 # n_g_itr - number of gradient steps
 # n_itr - number of chunks of optimization
+#     Seems roughly equivalent... slightly better for more
 # tau - decay constant for summing hessian
 # n_p - number of particles for M
 
@@ -35,7 +36,7 @@ ig.normalize()
 s_gen = ig.img
 s_gen_name = ig.img_name
 
-n_t = 100.
+n_t = 100
 LAMBDA = 0.0
 
 
