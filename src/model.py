@@ -199,18 +199,18 @@ class EMBurak(object):
 
         self.calculate_inner_products(s_gen, xr, yr)
 
-        R = self.tc.spikes(s_gen, XR, YR)[0]
+        r = self.tc.spikes(s_gen, xr, yr)[0]
         if print_mode:
             print 'The mean firing rate is {:.2f}'.format(
-                R.mean() / self.dt)
+                r.mean() / self.dt)
 
-        self.pf.Y = R.transpose()  # Update reference to spikes for PF
+        self.pf.Y = r.transpose()  # Update reference to spikes for PF
         # TODO: EWW
 
         if self.save_mode:
-            self.build_param_and_data_dict(s_gen, XR, YR, R)
+            self.build_param_and_data_dict(s_gen, xr, yr, r)
 
-        return XR, YR, R
+        return xr, yr, r
 
     @staticmethod
     def init_pix_rf_centers(l_n, l_i, ds, de, mode='sqr'):
@@ -246,7 +246,6 @@ class EMBurak(object):
         YS : float array, (l_i,)
             Y Coordinate of Pixel centers
         """
-
         if mode == 'sqr':
             XE, YE = np.meshgrid(
                 de * np.arange(- l_n / 2, l_n / 2),
