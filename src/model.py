@@ -1,6 +1,10 @@
-# Python script containing a class that does expectation maximization
-#   to estimate an image from simulated LGN cell responses
-# See the end of the script for a sample usage
+"""
+Main script.
+
+(1) Generate spikes given an image and an eye path
+(2) Use an EM-like algorithm to infer the eye path and image from spikes
+
+"""
 
 import numpy as np
 import os
@@ -16,6 +20,7 @@ from src.theano_backend import TheanoBackend
 
 
 class EMBurak(object):
+    """Produce spikes and infers the causes that generated those spikes."""
 
     def __init__(
         self, s_gen, d, motion_gen, motion_prior,
@@ -25,9 +30,9 @@ class EMBurak(object):
         output_dir_base=''
     ):
         """
-        Initializes the parts of the EM algorithm
+        Initialize the parts of the EM algorithm.
+
             -- Sets all parameters
-            -- Initializes Dictionary
             -- Compiles the theano backend
             -- Sets the gain factor for the spikes
             -- Initializes the object that generates the paths
@@ -87,7 +92,6 @@ class EMBurak(object):
         may have unexpected effects (because the changes won't necessarily
         propagate to subclasses.
         """
-
         self.data = {}
         self.save_mode = save_mode
 
@@ -136,11 +140,11 @@ class EMBurak(object):
                                       mode=neuron_layout)
 
         # Variances of Gaussians for each pixel
-        Var = np.ones((self.l_i,)).astype('float32') * (
+        var = np.ones((self.l_i,)).astype('float32') * (
             (0.5 * ds) ** 2 + (0.203 * de) ** 2)
 
         self.tc = TheanoBackend(
-            XS, YS, XE, YE, IE, Var,
+            XS, YS, XE, YE, IE, var,
             d, self.l0, self.l1, self.dt, 1.,
             self.gamma, self.lamb, self.tau)
         self.set_gain_factor(s_gen.shape)
@@ -154,6 +158,7 @@ class EMBurak(object):
         else:
             raise ValueError(
                 'motion_gen[mode] must be Diffusion of Experiment')
+        self.motion_gen = motion_gen
 
         self.pf = self.init_particle_filter(motion_prior, self.n_p)
         self.motion_prior = motion_prior
@@ -165,7 +170,8 @@ class EMBurak(object):
 
     def gen_data(self, s_gen, pg=None, print_mode=True):
         """
-        Generates a path and spikes
+        Generate a path and spikes.
+
         Builds a dictionary saving these data
 
         Parameters
@@ -184,15 +190,14 @@ class EMBurak(object):
         R : array, shape (n_n, n_t)
             Array containing the spike train for each neuron and timestep
         """
-
         # Generate Path
         if pg is None:
             pg = self.pg
         path = pg.gen_path()
-        XR = path[0][np.newaxis, :].astype('float32')
-        YR = path[1][np.newaxis, :].astype('float32')
+        xr = path[0][np.newaxis, :].astype('float32')
+        yr = path[1][np.newaxis, :].astype('float32')
 
-        self.calculate_inner_products(s_gen, XR, YR)
+        self.calculate_inner_products(s_gen, xr, yr)
 
         R = self.tc.spikes(s_gen, XR, YR)[0]
         if print_mode:
@@ -334,9 +339,9 @@ class EMBurak(object):
 
             # Transition matrix
             A = np.array([[1, 0, self.dt, 0],
-                          [0, 1, 0,       self.dt],
-                          [0, 0, adj,     0],
-                          [0, 0, 0,       adj]])
+                          [0, 1, 0, self.dt],
+                          [0, 0, adj, 0],
+                          [0, 0, 0, adj]])
 
             ipd = pf.GaussIPD(D_H, self.n_n, sigma0)
             tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A=A)
@@ -408,7 +413,7 @@ class EMBurak(object):
             if v == 0:
                 Es0 = Es
             dEs = [Ei - E0 for Ei, E0 in zip(Es, Es0)]
-            print self.get_cost_string(dEs, tf-t0) + str(self.img_SNR)
+            print self.get_cost_string(dEs, tf - t0) + str(self.img_SNR)
 
         self.tc.update_HB(XR, YR, W)
         print 'The hessian trace is {}'.format(
@@ -498,8 +503,8 @@ class EMBurak(object):
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
         self.data = {'DT': self.dt,
-                     # 'motion_prior': self.motion_prior,
-                     # 'motion_gen': self.motion_gen,
+                     'motion_prior': self.motion_prior,
+                     'motion_gen': self.motion_gen,
                      'ds': self.ds,
                      'de': self.de,
                      'L0': self.l0,
@@ -526,8 +531,7 @@ class EMBurak(object):
                      'actual_motion_mode': self.pg.mode(),
                      'S_gen': s_gen, 'S_gen_name': self.s_gen_name,
                      'R': R,
-                     'Ips': self.Ips, 'FP': self.FP,
-                     'motion_prior': self.motion_prior}
+                     'Ips': self.Ips, 'FP': self.FP}
 
     def save(self):
         """
@@ -551,6 +555,7 @@ class EMBurak(object):
         self.Ips, self.FP = self.tc.RFS(s_gen, XR, YR)
 
     """ Debug methods """
+
     def get_hessian(self):
         return self.tc.hessian_func(
             self.pf.XS[:, :, 0].transpose(),
