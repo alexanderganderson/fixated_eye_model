@@ -30,7 +30,7 @@ ig = ImageGenerator(L_I)
 ig.make_digit()
 ig.normalize()
 
-motion_gen_ = [{'mode': 'Diffusion', 'dc': 100.},
+motion_gen_ = [{'mode': 'Diffusion', 'dc': 0.001},
                {'mode': 'Diffusion', 'dc': 100.}]
 motion_prior = {'mode': 'PositionDiffusion', 'dc': 100.}
 
@@ -39,7 +39,7 @@ ds_ = [0.5, 0.75, 1.]
 for motion_gen, ds in product(motion_gen_, ds_):
     emb = EMBurak(
         ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
-        s_gen_name=ig.img_name, ds=1., neuron_layout='sqr',
+        s_gen_name=ig.img_name, ds=ds, neuron_layout='sqr',
         de=1., l_n=18, n_itr=100, lamb=0.0, tau=0.05,
         output_dir_base=output_dir)
     for _ in range(n_repeats):
