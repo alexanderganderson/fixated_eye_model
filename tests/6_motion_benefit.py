@@ -36,7 +36,7 @@ motion_info_ = [
     ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
      {'mode': 'PositionDiffusion', 'dc': d}) for d in d_]
 
-ds_ = [0.57]  # [0.5, 0.75, 1.]
+ds_ = [0.57 * 1.5]  # [0.5, 0.75, 1.]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
@@ -47,10 +47,15 @@ for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
         output_dir_base=output_dir)
     for _ in range(n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
-        emb.run_em(R)
+        emb.run_inference_true_path(R, XR, YR)
         emb.save()
         emb.reset()
 
+    for _ in range(n_repeats):
+        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
+        emb.run_em(R)
+        emb.save()
+        emb.reset()
 
 # FIXME: Plot the neuron grid
 
