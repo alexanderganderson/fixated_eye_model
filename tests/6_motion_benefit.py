@@ -31,10 +31,10 @@ ig.make_digit()
 ig.normalize()
 
 
-d_ = [0.001, 100.]
+d_ = [0.001, 20.]
 motion_info_ = [
-    ({'mode': 'Diffusion', 'dc': d},
-     {'mode': 'Experiment', 'fpath': 'data/paths.mat'}) for d in d_]
+    ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+     {'mode': 'PositionDiffusion', 'dc': d}) for d in d_]
 
 ds_ = [0.57]  # [0.5, 0.75, 1.]
 de = 1.09
