@@ -52,14 +52,18 @@ for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
         emb.save()
         emb.reset()
 
+for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
+    emb = EMBurak(
+        ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
+        s_gen_name=ig.img_name, ds=ds, neuron_layout='hex',
+        de=de, l_n=6, n_itr=100, lamb=0.0, tau=0.05,
+        output_dir_base=output_dir)
+
     for _ in range(n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
         emb.run_em(R)
         emb.save()
         emb.reset()
-
-# FIXME: Plot the neuron grid
-
 
 # convert -set delay 30 -colorspace GRAY
 # -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif
