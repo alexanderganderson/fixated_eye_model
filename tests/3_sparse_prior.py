@@ -48,7 +48,7 @@ for D in [D0, D1, D2]:
         output_dir_base=output_dir)
     for _ in range(n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
-        emb.run_EM(R)
+        emb.run_em(R)
         emb.save()
         emb.reset()
 

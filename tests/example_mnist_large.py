@@ -28,6 +28,6 @@ for _ in range(N_diff_images):
     for _ in range(N_replicates):
         emb.reset()
         emb.gen_data()
-        emb.run_EM()
+        emb.run_em()
         filename = emb.save
-        
+

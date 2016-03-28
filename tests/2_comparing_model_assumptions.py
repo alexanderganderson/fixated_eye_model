@@ -66,6 +66,6 @@ for motion_prior, D in modes:
         de=1.09, l_n=6, n_itr=10, lamb=0.0, tau=0.05)
     for _ in range(10):
         XR, YR, R = emb.gen_data(s_gen, print_mode=False)
-        emb.run_EM(R)
+        emb.run_em(R)
         emb.save()
         emb.reset()

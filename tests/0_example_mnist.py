@@ -33,7 +33,7 @@ emb = EMBurak(s_gen, D, motion_gen, motion_prior, n_t=50, save_mode=True,
               s_gen_name=s_gen_name, n_itr=10, lamb=0.0)
 XR, YR, R = emb.gen_data(s_gen)
 
-emb.run_EM(R)
+emb.run_em(R)
 
 
 emb.save()

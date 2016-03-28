@@ -183,9 +183,9 @@ class EMBurak(object):
 
         Returns
         -------
-        XR : array, shape (1, n_t)
+        xr : array, shape (1, n_t)
             X-Position of path generating spikes
-        YR : array, shape (1, n_t)
+        yr : array, shape (1, n_t)
             Y-Position of path generating spikes
         R : array, shape (n_n, n_t)
             Array containing the spike train for each neuron and timestep
@@ -215,8 +215,7 @@ class EMBurak(object):
     @staticmethod
     def init_pix_rf_centers(l_n, l_i, ds, de, mode='sqr'):
         """
-        Initialize the centers of the receptive fields of the neurons
-            Creates a population of on cells and off cells
+        Initialize the centers of the receptive fields of the neurons.
 
         Parameters
         ----------
@@ -235,61 +234,67 @@ class EMBurak(object):
         -------
         n_n : int
             Number of neurons
-        XE : float array, shape (n_n,)
+        xe : float array, shape (n_n,)
             X Coordinate of neuron centers
-        YE : float array, (n_n,)
+        ye : float array, (n_n,)
             Y Coordinate of neuron centers
-        IE : float array, (n_n,)
+        ie : float array, (n_n,)
             Identity of neurons (0 = ON, 1 = OFF)
-        XS : float array, (l_i,)
+        xs : float array, (l_i,)
             X Coordinate of Pixel centers
-        YS : float array, (l_i,)
+        ys : float array, (l_i,)
             Y Coordinate of Pixel centers
         """
         if mode == 'sqr':
-            XE, YE = np.meshgrid(
+            xe, ye = np.meshgrid(
                 de * np.arange(- l_n / 2, l_n / 2),
                 de * np.arange(- l_n / 2, l_n / 2))
-            XE, YE = XE.ravel(), YE.ravel()
+            xe, ye = xe.ravel(), ye.ravel()
         elif mode == 'hex':
-            XE, YE = gen_hex_lattice(l_n * de, a=de)
+            xe, ye = gen_hex_lattice(l_n * de, a=de)
+            n_n = xe.size
+            xe = xe + np.random.randn(n_n) * de * 0.05
+            ye = ye + np.random.randn(n_n) * de * 0.05
+
         else:
             raise ValueError('Unrecognized Neuron Mode {}'.format(mode))
-        XE, YE = XE.astype('float32'), YE.astype('float32')
+        xe, ye = xe.astype('float32'), ye.astype('float32')
 
-        XE = np.concatenate((XE, XE))
-        YE = np.concatenate((YE, YE))
-        n_n = XE.size
+        xe = np.concatenate((xe, xe))
+        ye = np.concatenate((ye, ye))
+        n_n = xe.size
 
         # Identity of LGN cells (ON = 0, OFF = 1)
-        IE = np.zeros((n_n,)).astype('float32')
-        IE[0: n_n / 2] = 1
+        ie = np.zeros((n_n,)).astype('float32')
+        ie[0: n_n / 2] = 1
 
         # Position of pixels
         tmp = np.arange(l_i) - (l_i - 1) / 2.
-        XS = ds * tmp.astype('float32')
-        YS = ds * tmp.astype('float32')
+        xs = ds * tmp.astype('float32')
+        ys = ds * tmp.astype('float32')
 
-        return n_n, XE, YE, IE, XS, YS, mode
+        return n_n, xe, ye, ie, xs, ys, mode
 
     def set_gain_factor(self, s_gen_shape):
         """
-        Sets the gain factor so that an image with pixels of intensity 1
-            results in spikes at the maximum firing rate
+        Set the gain factor.
+
+        An image with pixels of intensity 1
+            results in spikes at the maximum firing rate.
         """
-        G = 1.
-        self.tc.set_gain_factor(G)
+        g = 1.
+        self.tc.set_gain_factor(g)
 
         Ips, FP = self.tc.RFS(
             np.ones(s_gen_shape).astype('float32'),
             np.zeros((1, self.n_t)).astype('float32'),
             np.zeros((1, self.n_t)).astype('float32'))
-        G = (1. / Ips.max()).astype('float32')
-        self.tc.set_gain_factor(G)
+        g = (1. / Ips.max()).astype('float32')
+        self.tc.set_gain_factor(g)
 
     def init_particle_filter(self, motion_prior, n_p):
         """
-        Initializes the particle filter class
+        Initialize the particle filter class.
 
         Parameters
         ----------
@@ -315,17 +320,17 @@ class EMBurak(object):
         if motion_prior['mode'] == 'PositionDiffusion':
             # Diffusion
             dc_infer = motion_prior['dc']
-            D_H = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
-            sdev = np.sqrt(dc_infer * self.dt / 2) * np.ones((D_H,))
-            ipd = pf.GaussIPD(D_H, self.n_n, sdev * 0.001)
-            tpd = pf.GaussTPD(D_H, self.n_n, sdev)
-            ip = pf.GaussIP(D_H, sdev * 0.001)
-            tp = pf.GaussTP(D_H, sdev)
-            lp = PoissonLP(self.n_n, D_H, self.tc.spike_energy)
+            d_h = 2  # Dimension of hidden state (i.e. x,y = 2 dims)
+            sdev = np.sqrt(dc_infer * self.dt / 2) * np.ones((d_h,))
+            ipd = pf.GaussIPD(d_h, self.n_n, sdev * 0.001)
+            tpd = pf.GaussTPD(d_h, self.n_n, sdev)
+            ip = pf.GaussIP(d_h, sdev * 0.001)
+            tp = pf.GaussTP(d_h, sdev)
+            lp = PoissonLP(self.n_n, d_h, self.tc.spike_energy)
 
         elif motion_prior['mode'] == 'VelocityDiffusion':
             # FIXME: save these params
-            D_H = 4   # Hidden state dim, x,y,vx,vy
+            d_h = 4   # Hidden state dim, x,y,vx,vy
 
             v0 = motion_prior['v0']  # Initial Estimate for velocity
             dcv = motion_prior['dcv']  # Velocity Diffusion Constant
@@ -337,16 +342,16 @@ class EMBurak(object):
             sigma_t = np.array([eps, eps, st, st])  # Transition sigmas
 
             # Transition matrix
-            A = np.array([[1, 0, self.dt, 0],
+            a = np.array([[1, 0, self.dt, 0],
                           [0, 1, 0, self.dt],
                           [0, 0, adj, 0],
                           [0, 0, 0, adj]])
 
-            ipd = pf.GaussIPD(D_H, self.n_n, sigma0)
-            tpd = pf.GaussTPD(D_H, self.n_n, sigma_t, A=A)
-            ip = pf.GaussIP(D_H, sigma0)
-            tp = pf.GaussTP(D_H, sigma_t, A=A)
-            lp = PoissonLP(self.n_n, D_H, self.tc.spike_energy)
+            ipd = pf.GaussIPD(d_h, self.n_n, sigma0)
+            tpd = pf.GaussTPD(d_h, self.n_n, sigma_t, A=a)
+            ip = pf.GaussIP(d_h, sigma0)
+            tp = pf.GaussTP(d_h, sigma_t, A=a)
+            lp = PoissonLP(self.n_n, d_h, self.tc.spike_energy)
             # Note trick where PoissonLP takes 0,1 components of the
             # hidden state which is the same for both cases
 
@@ -354,21 +359,20 @@ class EMBurak(object):
             raise ValueError(
                 'Unrecognized Motion Prior ' + str(motion_prior))
 
-        R = np.zeros((self.n_n, self.n_t)).astype('float32')
+        r = np.zeros((self.n_n, self.n_t)).astype('float32')
         return pf.ParticleFilter(
-            ipd, tpd, ip, tp, lp, R.transpose(), n_p)
+            ipd, tpd, ip, tp, lp, r.transpose(), n_p)
 
     def reset(self):
-        """
-        Resets the class between EM runs
-        """
+        """Reset the class between EM runs."""
         self.data = {}
         self.pf.reset()
         self.tc.reset()
 
-    def run_E(self, t):
+    def run_e(self, t):
         """
-        Runs the the particle filter until it has run a total of t time steps
+        Run the the particle filter until it has run a total of t time steps.
+
         t - number of timesteps
         The result is saved in self.pf.XS,WS,means
         """
@@ -381,11 +385,19 @@ class EMBurak(object):
             self.pf.advance()
         self.pf.calculate_means_sdevs()
 
-        # print 'Path SNR ' + str(SNR(self.XR[0][0:t], self.pf.means[0:t, 0]))
+        # print 'Path SNR ' + str(SNR(self.xr[0][0:t], self.pf.means[0:t, 0]))
 
-    def run_M(self, t0, tf, R, N_g_itr=5):
+    def run_m(self, t0, tf, r, n_g_itr=5):
+        """Run the maximization step."""
+        xr = self.pf.XS[t0:tf, :, 0].transpose()
+        yr = self.pf.XS[t0:tf, :, 1].transpose()
+        w = self.pf.WS[t0:tf].transpose()
+        self._run_m(t0, tf, r, xr, yr, w, n_g_itr=n_g_itr)
+
+    def _run_m(self, t0, tf, r, xr, yr, w, n_g_itr=5):
         """
-        Runs the maximization step for the first t time steps
+        Run the maximization step for the first t time steps.
+
         resets the values of auxillary gradient descent variables at start
         t - number of time steps
         result is saved in t_A.get_value()
@@ -402,38 +414,40 @@ class EMBurak(object):
         fista_l = self.tc.calculate_L(
             tf, self.n_n, self.l0, self.l1, self.dt, self.fista_c)
 
-        XR = self.pf.XS[t0:tf, :, 0].transpose()
-        YR = self.pf.XS[t0:tf, :, 1].transpose()
-        W = self.pf.WS[t0:tf].transpose()
-        R_ = R[:, t0:tf]
-        for v in range(N_g_itr):
-            Es = self.tc.run_fista_step(XR, YR, R_, W, fista_l)
+        # xr = self.pf.XS[t0:tf, :, 0].transpose()
+        # yr = self.pf.XS[t0:tf, :, 1].transpose()
+        # w = self.pf.WS[t0:tf].transpose()
+        r_ = r[:, t0:tf]
+        for v in range(n_g_itr):
+            es = self.tc.run_fista_step(xr, yr, r_, w, fista_l)
             self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
             if v == 0:
-                Es0 = Es
-            dEs = [Ei - E0 for Ei, E0 in zip(Es, Es0)]
-            print self.get_cost_string(dEs, tf - t0) + str(self.img_SNR)
+                es0 = es
+            des = [Ei - E0 for Ei, E0 in zip(es, es0)]
+            print self.get_cost_string(des, tf - t0) + str(self.img_SNR)
 
-        self.tc.update_HB(XR, YR, W)
+        self.tc.update_HB(xr, yr, w)
         print 'The hessian trace is {}'.format(
             np.trace(self.tc.t_H.get_value()))
 
     @staticmethod
-    def get_cost_string(Es, t):
+    def get_cost_string(es, t):
         """
-        Prints costs given output of img_grad
+        Print costs given output of img_grad.
+
         Cost divided by the number of timesteps
-        Es - tuple containing the differet costs
+        es - tuple containing the differet costs
         t - number to timesteps
         """
         strg = ''
-        for item in Es:
+        for item in es:
             strg += '{:011.7f}'.format(item / t) + ' '
         return strg
 
-    def run_EM(self, R):
+    def run_em(self, r):
         """
-        Runs full expectation maximization algorithm
+        Run full expectation maximization algorithm.
+
         self.N_itr - number of iterations of EM
         self.N_g_itr - number of gradient steps in M step
         Saves summary of run info in self.data
@@ -441,12 +455,12 @@ class EMBurak(object):
 
         Parameters
         ----------
-        R : array, shape (n_n, n_t)
+        r : array, shape (n_n, n_t)
             Spike train to decode
         """
         self.tc.reset()
 
-        EM_data = {}
+        em_data = {}
 
         print 'Running full EM'
 
@@ -456,10 +470,10 @@ class EMBurak(object):
             print (
                 '\nIteration number {} Running up to time {}'.format(u, tf))
 
-            self.run_E(tf)
+            self.run_e(tf)
 
             c = 4  # if u <= 2 else 2
-            self.run_M(t0, tf, R, N_g_itr=self.n_g_itr * c)
+            self.run_m(t0, tf, r, N_g_itr=self.n_g_itr * c)
 
             iteration_data = {
                 'time_steps': tf, 'path_means': self.pf.means,
@@ -467,14 +481,14 @@ class EMBurak(object):
                 'image_est': self.tc.image_est(),
                 'coeff_est': self.tc.get_A()}
 
-            EM_data[u] = iteration_data
+            em_data[u] = iteration_data
 
         if self.save_mode:
-            self.data['EM_data'] = EM_data
+            self.data['EM_data'] = em_data
 
     def init_output_dir(self, output_dir_base):
         """
-        Create the output directory: output/output_dir_base
+        Create the output directory: output/output_dir_base.
 
         Parameters
         ----------
@@ -494,10 +508,11 @@ class EMBurak(object):
             os.mkdir(output_dir)
         return output_dir
 
-    def build_param_and_data_dict(self, s_gen, XR, YR, R):
+    def build_param_and_data_dict(self, s_gen, xr, yr, r):
         """
-        Creates a dictionary, self.data, that has all of the parameters
-            of the model
+        Create a dictionary.
+
+        self.data, that has all of the parameters of the model
         """
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
@@ -525,16 +540,17 @@ class EMBurak(object):
                      'Var': self.tc.t_Var.get_value(),
                      'G': self.tc.t_G.get_value(),
                      'tau': self.tau,
-                     'XR': XR, 'YR': YR,
+                     'XR': xr, 'YR': yr,
                      'IE': self.tc.t_IE.get_value(),
                      'actual_motion_mode': self.pg.mode(),
                      'S_gen': s_gen, 'S_gen_name': self.s_gen_name,
-                     'R': R,
+                     'R': r,
                      'Ips': self.Ips, 'FP': self.FP}
 
     def save(self):
         """
-        Saves information relevant to the EM run
+        Save information relevant to the EM run.
+
         data.pkl - saves dictionary with all data relevant to EM run
         (Only includes dict for EM data if that was run)
         Returns the filename
@@ -547,46 +563,46 @@ class EMBurak(object):
         pkl.dump(self.data, open(fn, 'wb'))
         return fn
 
-    def calculate_inner_products(self, s_gen, XR, YR):
-        """
-        Calculates the inner products used
-        """
-        self.Ips, self.FP = self.tc.RFS(s_gen, XR, YR)
+    def calculate_inner_products(self, s_gen, xr, yr):
+        """Calculate the inner products used."""
+        self.Ips, self.FP = self.tc.RFS(s_gen, xr, yr)
 
     """ Debug methods """
 
     def get_hessian(self):
+        """Return the hessian of the spike likelihood term."""
         return self.tc.hessian_func(
             self.pf.XS[:, :, 0].transpose(),
             self.pf.XS[:, :, 1].transpose(),
             self.pf.WS[:].transpose())
 
-    def get_spike_cost(self, R):
+    def get_spike_cost(self, r):
+        """Get -log p(R|X, S=DA)."""
         return self.tc.costs(
             self.pf.XS[:, :, 0].transpose(),
             self.pf.XS[:, :, 1].transpose(),
-            R,
+            r,
             self.pf.WS[:].transpose())[2]
 
-    def ideal_observer_cost(self, XR, YR, R, S):
+    def ideal_observer_cost(self, xr, yr, r, s):
         """
-        Get p(R|X, S)
+        Get p(R|X, S).
 
         Parameters
         ----------
-        R : array, shape (n_n, n_t)
+        r : array, shape (n_n, n_t)
             Spikes
-        S : array, shape (l_i, l_i)
+        s : array, shape (l_i, l_i)
             Image that generates the spikes
-        XR, YR: array, shape (1, n_t)
+        xr, yr: array, shape (1, n_t)
             Locations of eye that generated data
         Returns
         -------
         cost : float
             -log p(R|X, S)
         """
-        W = np.ones_like(XR)
-        return self.tc.image_costs(XR, YR, R, W, S)
+        w = np.ones_like(xr)
+        return self.tc.image_costs(xr, yr, r, w, s)
 
 
 # from utils.gradient_checker import hessian_check
@@ -615,7 +631,7 @@ class EMBurak(object):
 #        self.reset_img_gpu()
 #        print 'Original Path, infer image'
 #        t = self.N_T
-#        self.run_M(t)
+#        self.run_m(t)
 
 
 #    def true_image_infer_path_costs(self):
@@ -623,7 +639,7 @@ class EMBurak(object):
 #        print 'Path SNR'
 #        self.t_S.set_value(self.S)
 #        for _ in range(4):
-#            self.run_E(self.N_T)
+#            self.run_e(self.N_T)
 #
 #        if self.debug:
-#            self.pf.plot(self.XR[0], self.YR[0], self.DT)
+#            self.pf.plot(self.xr[0], self.yr[0], self.DT)

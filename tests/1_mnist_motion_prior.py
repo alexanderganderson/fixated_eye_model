@@ -33,7 +33,7 @@ emb = EMBurak(S_gen, D, n_t=30, save_mode=True,
               motion_prior='VelocityDiffusion')
 
 emb.gen_data()
-emb.run_EM()
+emb.run_em()
 
 emb.save()
 
