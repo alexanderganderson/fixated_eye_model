@@ -420,7 +420,8 @@ class EMBurak(object):
         xr = xr[:, t0:tf]
         yr = yr[:, t0:tf]
         w = np.ones_like(xr).astype('float32')
-        self._run_m(t0, tf, r, xr, yr, w, n_g_itr=n_g_itr)
+        r_ = r[:, t0:tf]
+        self._run_m(t0, tf, r_, xr, yr, w, n_g_itr=n_g_itr)
 
     def _run_m(self, t0, tf, r, xr, yr, w, n_g_itr=5):
         """
