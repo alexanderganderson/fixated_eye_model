@@ -449,7 +449,7 @@ class EMBurak(object):
         Run full expectation maximization algorithm.
 
         self.N_itr - number of iterations of EM
-        self.N_g_itr - number of gradient steps in M step
+        self.n_g_itr - number of gradient steps in M step
         Saves summary of run info in self.data
         Note running twice will overwrite this run info
 
@@ -473,7 +473,7 @@ class EMBurak(object):
             self.run_e(tf)
 
             c = 4  # if u <= 2 else 2
-            self.run_m(t0, tf, r, N_g_itr=self.n_g_itr * c)
+            self.run_m(t0, tf, r, n_g_itr=self.n_g_itr * c)
 
             iteration_data = {
                 'time_steps': tf, 'path_means': self.pf.means,
