@@ -128,7 +128,7 @@ class EMBurak(object):
         # EM Parameters
         # M - parameters (FISTA)
         self.fista_c = 0.8  # Constant to multiply fista L
-        self.n_g_itr = 5
+        self.n_g_itr = 20
         self.n_itr = n_itr
         self.tau = tau  # Decay constant for summing hessian
 
@@ -388,19 +388,57 @@ class EMBurak(object):
         # print 'Path SNR ' + str(SNR(self.xr[0][0:t], self.pf.means[0:t, 0]))
 
     def run_m(self, t0, tf, r, n_g_itr=5):
-        """Run the maximization step."""
+        """
+        Run the maximization step.
+
+        Parameters
+        ----------
+        t0, tf: int
+            Starting and ending times of spike batch.
+        r : float array, shape (n_n, n_t)
+            All spikes for the given trial.
+        """
+        r_ = r[:, t0:tf]
         xr = self.pf.XS[t0:tf, :, 0].transpose()
         yr = self.pf.XS[t0:tf, :, 1].transpose()
         w = self.pf.WS[t0:tf].transpose()
+        self._run_m(t0, tf, r_, xr, yr, w, n_g_itr=n_g_itr)
+
+    def run_m_true_path(self, t0, tf, r, xr, yr, n_g_itr=5):
+        """
+        Run m step knowing true path.
+
+        Parameters
+        ----------
+        t0, tf: int
+            Starting and ending times of spike batch.
+        r : float array, shape (n_n, n_t)
+            All spikes for the given trial.
+        xr, yr : float array, shape (1, n_t)
+            X and Y coordinates of true eye path
+        """
+        xr = xr[:, t0:tf]
+        yr = yr[:, t0:tf]
+        w = np.ones_like(xr).astype('float32')
         self._run_m(t0, tf, r, xr, yr, w, n_g_itr=n_g_itr)
 
     def _run_m(self, t0, tf, r, xr, yr, w, n_g_itr=5):
         """
-        Run the maximization step for the first t time steps.
+        Run the maximization step for the given batch of spikes.
 
-        resets the values of auxillary gradient descent variables at start
-        t - number of time steps
-        result is saved in t_A.get_value()
+        Resets the values of auxillary gradient descent variables at start
+        Result is saved in t_A.get_value()
+
+        Parameters
+        ----------
+        r : float array, shape (n_n, tf - t0)
+            Spikes
+        xr, yr : float array, shape (n_b, tf - t0)
+
+        w : float array, shape (n_b, tf - t0)
+
+        n_g_itr : int
+            Number of gradient steps
         """
         self.tc.init_m_aux()
         self.tc.update_Ap()
@@ -414,12 +452,8 @@ class EMBurak(object):
         fista_l = self.tc.calculate_L(
             tf, self.n_n, self.l0, self.l1, self.dt, self.fista_c)
 
-        # xr = self.pf.XS[t0:tf, :, 0].transpose()
-        # yr = self.pf.XS[t0:tf, :, 1].transpose()
-        # w = self.pf.WS[t0:tf].transpose()
-        r_ = r[:, t0:tf]
         for v in range(n_g_itr):
-            es = self.tc.run_fista_step(xr, yr, r_, w, fista_l)
+            es = self.tc.run_fista_step(xr, yr, r, w, fista_l)
             self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
             if v == 0:
                 es0 = es
@@ -448,8 +482,6 @@ class EMBurak(object):
         """
         Run full expectation maximization algorithm.
 
-        self.N_itr - number of iterations of EM
-        self.n_g_itr - number of gradient steps in M step
         Saves summary of run info in self.data
         Note running twice will overwrite this run info
 
@@ -457,6 +489,10 @@ class EMBurak(object):
         ----------
         r : array, shape (n_n, n_t)
             Spike train to decode
+        self.n_itr : int
+            Number of iterations of EM
+        self.n_g_itr : int
+            Number of gradient steps in M step
         """
         self.tc.reset()
 
@@ -467,17 +503,48 @@ class EMBurak(object):
         for u in range(self.n_itr):
             t0 = self.n_t * u / self.n_itr
             tf = self.n_t * (u + 1) / self.n_itr
-            print (
-                '\nIteration number {} Running up to time {}'.format(u, tf))
+            print('Iteration: {} | Running up to time {}'.format(u, tf))
 
             self.run_e(tf)
-
-            c = 4  # if u <= 2 else 2
-            self.run_m(t0, tf, r, n_g_itr=self.n_g_itr * c)
+            self.run_m(t0, tf, r, n_g_itr=self.n_g_itr)
 
             iteration_data = {
                 'time_steps': tf, 'path_means': self.pf.means,
                 'path_sdevs': self.pf.sdevs,
+                'image_est': self.tc.image_est(),
+                'coeff_est': self.tc.get_A()}
+
+            em_data[u] = iteration_data
+
+        if self.save_mode:
+            self.data['EM_data'] = em_data
+
+    def run_inference_true_path(self, r, xr, yr):
+        """
+        Run inference algorithm given the true eye path.
+
+        Parameters
+        ----------
+        r : array, shape (n_t, n_n)
+            Spikes
+        xr, yr : float array, shape (1, n_t)
+            True X and Y position of the eye
+        """
+        self.tc.reset()
+
+        em_data = {}
+
+        print('Running Image Optimization using True Eye Path\n')
+
+        for u in range(self.n_itr):
+            t0 = self.n_t * u / self.n_itr
+            tf = self.n_t * (u + 1) / self.n_itr
+            print('Iteration: {} | Running up to time {}'.format(u, tf))
+
+            self.run_m_true_path(t0, tf, r, xr, yr, n_g_itr=self.n_g_itr)
+
+            iteration_data = {
+                'time_steps': tf,
                 'image_est': self.tc.image_est(),
                 'coeff_est': self.tc.get_A()}
 
