@@ -15,21 +15,29 @@ from itertools import product
 from src.model import EMBurak
 from utils.image_gen import ImageGenerator
 output_dir = 'motion_benefit1'
-n_t = 200 
+n_t = 200
 n_itr = 100
-n_repeats = 5 
+n_repeats = 5
 
-# Sparse coding dictionary prior
-data = loadmat('sparse_coder/output/mnist_dictionary.mat')
-D = data['D']
+if False:
+    # Sparse coding dictionary prior
+    data = loadmat('sparse_coder/output/mnist_dictionary.mat')
+    D = data['D']
 
-# Initalize image
-_, N_pix = D.shape
-L_I = int(np.sqrt(N_pix))  # Linear dimension of image
+    # Initalize image
+    _, N_pix = D.shape
+    L_I = int(np.sqrt(N_pix))  # Linear dimension of image
 
-ig = ImageGenerator(L_I)
-ig.make_digit()
-ig.normalize()
+    ig = ImageGenerator(L_I)
+    ig.make_digit()
+    ig.normalize()
+else:
+    L_I = 14
+    ig = ImageGenerator(L_I)
+    ig.make_big_e()
+    ig.normalize()
+
+    D = np.eye(L_I ** 2)
 
 
 motion_info_ = [
@@ -38,7 +46,7 @@ motion_info_ = [
     ({'mode': 'Diffusion', 'dc': 0.001},
      {'mode': 'PositionDiffusion', 'dc': 0.001})]
 
-ds_ = [0.57]  # [0.5, 0.75, 1.]
+ds_ = [0.57 / 2.]  # [0.5, 0.75, 1.]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
@@ -52,14 +60,6 @@ for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
         emb.run_inference_true_path(R, XR, YR)
         emb.save()
         emb.reset()
-
-#for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
-#    emb = EMBurak(
-#        ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
-#        s_gen_name=ig.img_name, ds=ds, neuron_layout='hex',
-#        de=de, l_n=6, n_itr=n_itr, lamb=0.0, tau=0.05,
-#        output_dir_base=output_dir)
-
     for _ in range(n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
         emb.run_em(R)
