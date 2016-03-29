@@ -101,16 +101,19 @@ class DataAnalyzer:
             (There is a degeneracy in the representation that this
             fixes. )
         """
-        XYR_est = self.data['EM_data'][q]['path_means']
         S_est = self.data['EM_data'][q]['image_est']
         t = self.data['EM_data'][q]['time_steps']
 
-        XR_est = XYR_est[:, 0]
-        YR_est = XYR_est[:, 1]
+	try:
+	        XYR_est = self.data['EM_data'][q]['path_means']
+        	XR_est = XYR_est[:, 0]
+	        YR_est = XYR_est[:, 1]
 
-        dx = np.mean(self.XR[0:t] - XR_est[0:t])
-        dy = np.mean(self.YR[0:t] - YR_est[0:t])
-
+        	dx = np.mean(self.XR[0:t] - XR_est[0:t])
+	        dy = np.mean(self.YR[0:t] - YR_est[0:t])
+	except KeyError:
+		dx = 0.
+		dy = 0.
         self.dx = dx
         self.dy = dy
 

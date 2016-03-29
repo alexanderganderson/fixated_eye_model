@@ -122,7 +122,7 @@ class EMBurak(object):
         self.de = de
 
         # Image Prior Parameters
-        self.gamma = 100.  # Pixel out of bounds cost parameter
+        self.gamma = 10.  # Pixel out of bounds cost parameter
         self.lamb = lamb  # the sparse prior is delta (S-DA) + lamb * |A|
 
         # EM Parameters
@@ -252,9 +252,9 @@ class EMBurak(object):
             xe, ye = xe.ravel(), ye.ravel()
         elif mode == 'hex':
             xe, ye = gen_hex_lattice(l_n * de, a=de)
-            n_n = xe.size
-            xe = xe + np.random.randn(n_n) * de * 0.05
-            ye = ye + np.random.randn(n_n) * de * 0.05
+#            n_n = xe.size
+#            xe = xe + np.random.randn(n_n) * de * 0.05
+#            ye = ye + np.random.randn(n_n) * de * 0.05
 
         else:
             raise ValueError('Unrecognized Neuron Mode {}'.format(mode))
@@ -516,10 +516,10 @@ class EMBurak(object):
                 'coeff_est': self.tc.get_A()}
 
             em_data[u] = iteration_data
+	em_data['mode'] = 'EM'
 
         if self.save_mode:
             self.data['EM_data'] = em_data
-
     def run_inference_true_path(self, r, xr, yr):
         """
         Run inference algorithm given the true eye path.
@@ -550,6 +550,7 @@ class EMBurak(object):
                 'coeff_est': self.tc.get_A()}
 
             em_data[u] = iteration_data
+	em_data['mode'] = 'path_given'
 
         if self.save_mode:
             self.data['EM_data'] = em_data
