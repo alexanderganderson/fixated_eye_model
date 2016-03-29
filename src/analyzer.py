@@ -61,7 +61,7 @@ class DataAnalyzer:
         self.S_gen = self.data['S_gen']
         self.Var = self.data['Var'][0]
 
-        self.blur_sdev = float(np.sqrt(self.Var)) / self.data['ds']
+        self.blur_sdev = float(np.sqrt(0.5))  # float(np.sqrt(self.Var)) / self.data['ds']
 
         self.N_itr = self.data['N_itr']
         # self.DC_gen = self.data['DC_gen']
