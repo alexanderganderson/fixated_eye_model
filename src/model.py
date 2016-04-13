@@ -151,7 +151,7 @@ class EMBurak(object):
 
         if motion_gen['mode'] == 'Diffusion':
             self.pg = DiffusionPathGenerator(
-                self.n_t, self.l_i, motion_gen['dc'], self.dt, self.da)
+                self.n_t, self.l_i, motion_gen['dc'], self.dt)
         elif motion_gen['mode'] == 'Experiment':
             self.pg = ExperimentalPathGenerator(
                 self.n_t, motion_gen['fpath'], self.dt)
