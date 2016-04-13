@@ -516,10 +516,11 @@ class EMBurak(object):
                 'coeff_est': self.tc.get_A()}
 
             em_data[u] = iteration_data
-	em_data['mode'] = 'EM'
+        em_data['mode'] = 'EM'
 
         if self.save_mode:
             self.data['EM_data'] = em_data
+
     def run_inference_true_path(self, r, xr, yr):
         """
         Run inference algorithm given the true eye path.
@@ -550,7 +551,7 @@ class EMBurak(object):
                 'coeff_est': self.tc.get_A()}
 
             em_data[u] = iteration_data
-	em_data['mode'] = 'path_given'
+        em_data['mode'] = 'path_given'
 
         if self.save_mode:
             self.data['EM_data'] = em_data
@@ -611,7 +612,7 @@ class EMBurak(object):
                      'tau': self.tau,
                      'XR': xr, 'YR': yr,
                      'IE': self.tc.t_IE.get_value(),
-                     'actual_motion_mode': self.pg.mode(),
+                     # 'actual_motion_mode': self.pg.mode(),
                      'S_gen': s_gen, 'S_gen_name': self.s_gen_name,
                      'R': r,
                      'Ips': self.Ips, 'FP': self.FP}

@@ -1,6 +1,6 @@
-# import sys
+"""Basic test of the code."""
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from scipy.io import loadmat
 
 # sys.path.append('..')
@@ -36,9 +36,15 @@ XR, YR, R = emb.gen_data(s_gen)
 emb.run_em(R)
 
 
-emb.save()
+# emb.save()
 
-# da = DataAnalyzer(emb.data)
+da = DataAnalyzer(emb.data)
+da.plot_em_estimate(0)
+print da.snr_list()
+print da.time_list()
+
+
+
 
 # # Plot the Estimated Image and Path after the algorithm ran
 # da.plot_EM_estimate(da.N_itr - 1)
