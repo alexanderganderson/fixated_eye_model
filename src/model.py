@@ -106,7 +106,7 @@ class EMBurak(object):
 
         # Simulation Parameters
         self.dt = dt  # Simulation timestep
-        self.l0 = 10.
+        self.l0 = 5.
         self.l1 = 100.
 
         # Problem Dimensions
@@ -459,11 +459,11 @@ class EMBurak(object):
             if v == 0:
                 es0 = es
             des = [Ei - E0 for Ei, E0 in zip(es, es0)]
-            print self.get_cost_string(des, tf - t0) + str(self.img_SNR)
+#            print self.get_cost_string(des, tf - t0) + str(self.img_SNR)
 
         self.tc.update_HB(xr, yr, w)
-        print 'The hessian trace is {}'.format(
-            np.trace(self.tc.t_H.get_value()))
+#        print 'The hessian trace is {}'.format(
+#            np.trace(self.tc.t_H.get_value()))
 
     @staticmethod
     def get_cost_string(es, t):

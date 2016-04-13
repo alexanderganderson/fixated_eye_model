@@ -14,10 +14,10 @@ from itertools import product
 
 from src.model import EMBurak
 from utils.image_gen import ImageGenerator
-output_dir = 'motion_benefit1'
-n_t = 200
+output_dir = 'motion_benefit2'
+n_t = 500
 n_itr = 100
-n_repeats = 5
+n_repeats = 5 
 
 if False:
     # Sparse coding dictionary prior
@@ -41,30 +41,30 @@ else:
 
 
 motion_info_ = [
-    ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+    ({'mode': 'PositionDiffusion', 'dc': 20.},      #{'mode': 'Experiment', 'fpath': 'data/paths.mat'},
      {'mode': 'PositionDiffusion', 'dc': 20.}),
-    ({'mode': 'Diffusion', 'dc': 0.001},
-     {'mode': 'PositionDiffusion', 'dc': 0.001})]
+    ({'mode': 'Diffusion', 'dc': 0.00001},
+     {'mode': 'PositionDiffusion', 'dc': 0.00001})]
 
-ds_ = [0.57 / 2.]  # [0.5, 0.75, 1.]
+ds_ = [0.4] # [0.57, 0.75, 1.]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
     emb = EMBurak(
         ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
         s_gen_name=ig.img_name, ds=ds, neuron_layout='hex',
-        de=de, l_n=6, n_itr=n_itr, lamb=0.0, tau=0.05,
+        de=de, l_n=6, n_itr=n_itr, lamb=0.0, tau=0.5,
         output_dir_base=output_dir)
     for _ in range(n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
         emb.run_inference_true_path(R, XR, YR)
         emb.save()
         emb.reset()
-    for _ in range(n_repeats):
-        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
-        emb.run_em(R)
-        emb.save()
-        emb.reset()
+#    for _ in range(n_repeats):
+#        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
+#        emb.run_em(R)
+#        emb.save()
+#        emb.reset()
 
 # convert -set delay 30 -colorspace GRAY
 # -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif
