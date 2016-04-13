@@ -252,10 +252,9 @@ class EMBurak(object):
             xe, ye = xe.ravel(), ye.ravel()
         elif mode == 'hex':
             xe, ye = gen_hex_lattice(l_n * de, a=de)
-#            n_n = xe.size
-#            xe = xe + np.random.randn(n_n) * de * 0.05
-#            ye = ye + np.random.randn(n_n) * de * 0.05
-
+            n_n = xe.size
+            xe, ye = [xy + (np.random.rand(n_n) - 0.5) * de
+                      for xy in [xe, ye]]
         else:
             raise ValueError('Unrecognized Neuron Mode {}'.format(mode))
         xe, ye = xe.astype('float32'), ye.astype('float32')
