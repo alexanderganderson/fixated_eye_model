@@ -43,7 +43,7 @@ da.plot_em_estimate(0)
 print da.snr_list()
 print da.time_list()
 
-
+da.plot_image_and_rfs(s=50)
 
 
 # # Plot the Estimated Image and Path after the algorithm ran

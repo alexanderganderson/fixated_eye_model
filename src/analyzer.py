@@ -470,7 +470,7 @@ class DataAnalyzer:
     def plot_image_and_rfs(self, s=150):
         """Plot the image with the neuron RF centers."""
         _plot_image_and_rfs(
-            self.data['XE'], self.data['ye'], self.data['de'],
+            self.data['XE'], self.data['YE'], self.data['de'],
             self.xs, self.ys, self.data['ds'],
             self.xr, self.yr,
             self.data['S_gen'], s)
@@ -502,7 +502,7 @@ def _plot_image_and_rfs(xe, ye, de, xs, ys, ds, xr, yr, s_gen,
                 label='Pixel Centers, ds={}'.format(ds), s=s, alpha=0.5)
     plt.axes().set_aspect('equal')
     if xr is not None and yr is not None:
-        plt.plot(xr[0, ::5], yr[0, ::5], label='Eye path', c='g')
+        plt.plot(xr[::5], yr[::5], label='Eye path', c='g')
     plt.legend()
 
 

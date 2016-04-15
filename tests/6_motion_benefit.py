@@ -41,12 +41,12 @@ else:
 
 
 motion_info_ = [
-    ({'mode': 'PositionDiffusion', 'dc': 20.},      #{'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+    ({'mode': 'Diffusion', 'dc': 20.},      #{'mode': 'Experiment', 'fpath': 'data/paths.mat'},
      {'mode': 'PositionDiffusion', 'dc': 20.}),
     ({'mode': 'Diffusion', 'dc': 0.00001},
      {'mode': 'PositionDiffusion', 'dc': 0.00001})]
 
-ds_ = [0.4] # [0.57, 0.75, 1.]
+ds_ = [0.5] # [0.57, 0.75, 1.]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
