@@ -4,7 +4,7 @@ import numpy as np
 import cPickle as pkl
 import sys
 import os
-from scipy.ndimage.filters import gaussian_filter
+# from scipy.ndimage.filters import gaussian_filter
 import matplotlib.pyplot as plt
 
 
@@ -245,6 +245,15 @@ class DataAnalyzer:
 
     def plot_image_estimate(self, q):
         """Plot the estimated image after iteration q."""
+        res = _get_sum_gaussian_image(
+            self.data['EM_data'][q]['image_est'].ravel(),
+            self.xs, self.ys,
+            self.data['ds'] / np.sqrt(2), n=100)
+        plt.title('Estimated Image, S = DA:\n SNR = %.2f'
+                  % self.snr_one_iteration(q))
+
+        plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest')
+        plt.colorbar()
 
     def plot_base_image(self):
         """Plot the original image that generates the data."""
@@ -252,16 +261,8 @@ class DataAnalyzer:
             self.S_gen.ravel(), self.xs, self.ys,
             self.data['ds'] / np.sqrt(2), n=100)
 
-        m1 = np.min(self.S_gen)
-        m2 = np.max(self.S_gen)
-
-        vmin = -0.1 * (m2 - m1) + m1
-        vmax = m2 + 0.1 * (m2 - m1)
-
         plt.title('Stationary Object in the World')
-        plt.imshow(res,
-                   cmap=plt.cm.gray, interpolation='nearest',
-                   vmin=vmin, vmax=vmax)
+        plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest')
         plt.colorbar()
 
     def plot_em_estimate(self, q):
@@ -269,20 +270,11 @@ class DataAnalyzer:
         if q == -1:
             q = self.N_itr - 1
 
-        m1 = np.min(self.S_gen)
-        m2 = np.max(self.S_gen)
-
-        vmin = -0.1 * (m2 - m1) + m1
-        vmax = m2 + 0.1 * (m2 - m1)
-
         n_time_steps = self.data['EM_data'][q]['time_steps']
         t_ms = self.DT * n_time_steps * 1000.
 
         fig = plt.figure(figsize=(12, 8))
         fig.suptitle('EM Reconstruction after t = {}'.format(t_ms))
-
-        # Note actual image is convolved with a gaussian during the simulation
-        #   even though the image saved has not has this happen yet
 
         plt.subplot(2, 3, 2)
         self.plot_spikes(n_time_steps - 1, mode='ON')
@@ -291,14 +283,7 @@ class DataAnalyzer:
         self.plot_spikes(n_time_steps - 1, mode='OFF')
 
         plt.subplot(2, 3, 4)
-        plt.title('Estimated Image, S = DA:\n SNR = %.2f'
-                  % self.snr_one_iteration(q))
-        s_est = self.data['EM_data'][q]['image_est']
-
-        plt.imshow(gaussian_filter(s_est, self.blur_sdev),
-                   cmap=plt.cm.gray, interpolation='nearest',
-                   vmin=vmin, vmax=vmax)
-        plt.colorbar()
+        self.plot_image_estimate(q)
 
         plt.subplot(2, 3, 1)
         self.plot_base_image()

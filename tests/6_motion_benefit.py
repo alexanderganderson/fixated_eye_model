@@ -9,53 +9,67 @@ See which case it is easier to reconstruct the image.
 
 import numpy as np
 from scipy.io import loadmat
+from argparse import ArgumentParser
 
 from itertools import product
 
 from src.model import EMBurak
 from utils.image_gen import ImageGenerator
-output_dir = 'motion_benefit2'
-n_t = 500
-n_itr = 100
-n_repeats = 5 
 
-if False:
-    # Sparse coding dictionary prior
-    data = loadmat('sparse_coder/output/mnist_dictionary.mat')
-    D = data['D']
+parser = ArgumentParser('Test the motion benefit')
+parser.add_argument('--n_repeats', type=int, default=5,
+                    help='Number of repetitions for each set of parameters.')
+parser.add_argument('--n_t', type=int, default=100,
+                    help='Number of timesteps')
+parser.add_argument('--output_dir', type=str, default='motion_benefit',
+                    help='Output_directory')
+parser.add_argument('--dc', type=float, default=20.,
+                    help='Diffusion Constant for eye motion')
+parser.add_argument('--image', type=str, default='e',
+                    help='Digit type')
+parser.add_argument('--ds', type=float, default=0.5,
+                    help='Pixel Spacing')
 
-    # Initalize image
-    _, N_pix = D.shape
-    L_I = int(np.sqrt(N_pix))  # Linear dimension of image
+args = parser.parse_args()
 
-    ig = ImageGenerator(L_I)
-    ig.make_digit()
-    ig.normalize()
-else:
+n_itr = args.n_t / 5
+
+if args.image is 'e':
     L_I = 14
     ig = ImageGenerator(L_I)
     ig.make_big_e()
     ig.normalize()
-
     D = np.eye(L_I ** 2)
+elif args.image is 'mnist':
+    # Sparse coding dictionary prior
+    data = loadmat('sparse_coder/output/mnist_dictionary.mat')
+    D = data['D']
+    _, N_pix = D.shape
+    L_I = int(np.sqrt(N_pix))  # Linear dimension of image
+    ig = ImageGenerator(L_I)
+    ig.make_digit()
+    ig.normalize()
+else:
+    raise ValueError('Unrecognized image: {}'.format(args.image))
 
+# {'mode': 'Experiment', 'fpath': 'data/paths.mat'},
 
 motion_info_ = [
-    ({'mode': 'Diffusion', 'dc': 20.},      #{'mode': 'Experiment', 'fpath': 'data/paths.mat'},
-     {'mode': 'PositionDiffusion', 'dc': 20.}),
+    ({'mode': 'Diffusion', 'dc': args.dc},
+     {'mode': 'PositionDiffusion', 'dc': args.dc}),
     ({'mode': 'Diffusion', 'dc': 0.00001},
      {'mode': 'PositionDiffusion', 'dc': 0.00001})]
 
-ds_ = [0.5] # [0.57, 0.75, 1.]
+ds_ = [args.ds]  # [0.57, 0.75, 1.]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
     emb = EMBurak(
-        ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
+        ig.img, D, motion_gen, motion_prior, n_t=args.n_t, save_mode=True,
         s_gen_name=ig.img_name, ds=ds, neuron_layout='hex',
         de=de, l_n=6, n_itr=n_itr, lamb=0.0, tau=0.5,
-        output_dir_base=output_dir)
-    for _ in range(n_repeats):
+        output_dir_base=args.output_dir)
+    for _ in range(args.n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
         emb.run_inference_true_path(R, XR, YR)
         emb.save()
