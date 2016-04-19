@@ -40,6 +40,8 @@ if args.image is 'e':
     ig.make_big_e()
     ig.normalize()
     D = np.eye(L_I ** 2)
+    from utils.block_prior import block_prior
+    D = block_prior(L_I / 2)
 elif args.image is 'mnist':
     # Sparse coding dictionary prior
     data = loadmat('sparse_coder/output/mnist_dictionary.mat')
