@@ -443,11 +443,11 @@ class EMBurak(object):
         self.tc.init_m_aux()
         self.tc.update_Ap()
 
-        desc = ''
-        for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
-            desc += '    {:<6} |'.format(item)
-        desc += ' / Delta t | SNR'
-        print desc
+        # desc = ''
+        # for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
+        #     desc += '    {:<6} |'.format(item)
+        # desc += ' / Delta t | SNR'
+        # print desc
 
         fista_l = self.tc.calculate_L(
             tf, self.n_n, self.l0, self.l1, self.dt, self.fista_c)
@@ -457,7 +457,7 @@ class EMBurak(object):
             self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
             if v == 0:
                 es0 = es
-            des = [Ei - E0 for Ei, E0 in zip(es, es0)]
+            # des = [Ei - E0 for Ei, E0 in zip(es, es0)]
 #            print self.get_cost_string(des, tf - t0) + str(self.img_SNR)
 
         self.tc.update_HB(xr, yr, w)
