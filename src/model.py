@@ -27,7 +27,8 @@ class EMBurak(object):
         dt=0.001, n_t=50, l_n=14, neuron_layout='sqr',
         ds=1., de=1., lamb=0.,
         tau=0.05, save_mode=False, n_itr=20, s_gen_name=' ',
-        output_dir_base=''
+        output_dir_base='', n_g_itr=20, fista_c=0.8, n_p=20, print_mode=True,
+        gamma=10.
     ):
         """
         Initialize the parts of the EM algorithm.
@@ -122,18 +123,18 @@ class EMBurak(object):
         self.de = de
 
         # Image Prior Parameters
-        self.gamma = 10.  # Pixel out of bounds cost parameter
+        self.gamma = gamma  # Pixel out of bounds cost parameter
         self.lamb = lamb  # the sparse prior is delta (S-DA) + lamb * |A|
 
         # EM Parameters
         # M - parameters (FISTA)
-        self.fista_c = 0.8  # Constant to multiply fista L
-        self.n_g_itr = 20
+        self.fista_c = fista_c  # Constant to multiply fista L
+        self.n_g_itr = n_g_itr
         self.n_itr = n_itr
         self.tau = tau  # Decay constant for summing hessian
 
         # E Parameters (Particle Filter)
-        self.n_p = 20  # Number of particles for the EM
+        self.n_p = n_p  # Number of particles for the EM
 
         (self.n_n, XE, YE, IE, XS, YS, neuron_mode
          ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de,
@@ -168,7 +169,7 @@ class EMBurak(object):
 
         print 'Initialization done'
 
-    def gen_data(self, s_gen, pg=None, print_mode=True):
+    def gen_data(self, s_gen, pg=None):
         """
         Generate a path and spikes.
 
@@ -200,7 +201,7 @@ class EMBurak(object):
         self.calculate_inner_products(s_gen, xr, yr)
 
         r = self.tc.spikes(s_gen, xr, yr)[0]
-        if print_mode:
+        if self.print_mode:
             print 'The mean firing rate is {:.2f}'.format(
                 r.mean() / self.dt)
 
@@ -443,26 +444,29 @@ class EMBurak(object):
         self.tc.init_m_aux()
         self.tc.update_Ap()
 
-        # desc = ''
-        # for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
-        #     desc += '    {:<6} |'.format(item)
-        # desc += ' / Delta t | SNR'
-        # print desc
+        if self.print_mode:
+            desc = ''
+            for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
+                desc += '    {:<6} |'.format(item)
+            desc += ' / Delta t | SNR'
+            print desc
 
         fista_l = self.tc.calculate_L(
             tf, self.n_n, self.l0, self.l1, self.dt, self.fista_c)
 
         for v in range(n_g_itr):
             es = self.tc.run_fista_step(xr, yr, r, w, fista_l)
-            self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
-            if v == 0:
-                es0 = es
-            # des = [Ei - E0 for Ei, E0 in zip(es, es0)]
-#            print self.get_cost_string(des, tf - t0) + str(self.img_SNR)
+            # self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
+            if self.print_mode:
+                if v == 0:
+                    es0 = es
+                des = [Ei - E0 for Ei, E0 in zip(es, es0)]
+                print self.get_cost_string(des, tf - t0)  # + str(self.img_SNR)
 
         self.tc.update_HB(xr, yr, w)
-#        print 'The hessian trace is {}'.format(
-#            np.trace(self.tc.t_H.get_value()))
+        if self.print_mode:
+            print 'The hessian trace is {}'.format(
+                np.trace(self.tc.t_H.get_value()))
 
     @staticmethod
     def get_cost_string(es, t):
