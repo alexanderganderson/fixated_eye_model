@@ -106,7 +106,7 @@ class EMBurak(object):
 
         # Simulation Parameters
         self.dt = dt  # Simulation timestep
-        self.l0 = 5.
+        self.l0 = 10.
         self.l1 = 100.
 
         # Problem Dimensions
@@ -253,7 +253,7 @@ class EMBurak(object):
         elif mode == 'hex':
             xe, ye = gen_hex_lattice(l_n * de, a=de)
             n_n = xe.size
-            xe, ye = [xy + (np.random.rand(n_n) - 0.5) * de * 0.5
+            xe, ye = [xy + (np.random.rand(n_n) - 0.5) * de * 0.25
                       for xy in [xe, ye]]
         else:
             raise ValueError('Unrecognized Neuron Mode {}'.format(mode))

@@ -46,7 +46,7 @@ def snr(p1, l1x, l1y, p2, l2x, l2y, var):
     ip11 = inner_product(p1, l1x, l1y, p1, l1x, l1y, var)
     ip22 = inner_product(p2, l2x, l2y, p2, l2x, l2y, var)
 
-    return ip11 / (ip11 + ip22 - 2 * ip12)
+    return ip11 / (ip11 + ip22 - 2 * ip12)  # , 1. / (1 - ip12 / np.sqrt(ip11 * ip22))
 
 
 class DataAnalyzer:
@@ -134,9 +134,12 @@ class DataAnalyzer:
             dy = 0.
         self.dx = dx
         self.dy = dy
-
-        return snr(self.S_gen.ravel(), self.xs, self.ys,
-                   s_est.ravel(), self.xs + dx, self.ys + dy,
+	i1 = self.S_gen.ravel()
+	i2 = s_est.ravel()
+	i1 = i1 / i1.max()
+	i2 = i2 / i2.max()
+        return snr(i1, self.xs, self.ys,
+                   i2, self.xs + dx, self.ys + dy,
                    self.var)
 
     def snr_list(self):
@@ -245,6 +248,9 @@ class DataAnalyzer:
 
     def plot_image_estimate(self, q):
         """Plot the estimated image after iteration q."""
+        if q == -1:
+            q = self.N_itr - 1
+
         res = _get_sum_gaussian_image(
             self.data['EM_data'][q]['image_est'].ravel(),
             self.xs, self.ys,
@@ -512,7 +518,7 @@ def _get_sum_gaussian_image(s_gen, xs, ys, sdev, n=50):
         Image of the sum of Gaussians
     """
     m1, m2 = xs.min(), xs.max()
-    xx = np.arange(m1, m2, (m2 - m1) / n)
+    xx = np.linspace(m1, m2, n)
     XX, YY = np.meshgrid(xx, xx)
     XX, YY = [u.ravel()[np.newaxis, :] for u in [XX, YY]]
     xs, ys, S_gen = [u[:, np.newaxis] for u in [xs, ys, s_gen]]

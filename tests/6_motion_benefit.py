@@ -41,7 +41,7 @@ if args.image is 'e':
     ig.normalize()
     D = np.eye(L_I ** 2)
     from utils.block_prior import block_prior
-    D = block_prior(L_I / 2)
+    D = 0.25 * block_prior(L_I / 2)
 elif args.image is 'mnist':
     # Sparse coding dictionary prior
     data = loadmat('sparse_coder/output/mnist_dictionary.mat')
@@ -69,14 +69,14 @@ for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
     emb = EMBurak(
         ig.img, D, motion_gen, motion_prior, n_t=args.n_t, save_mode=True,
         s_gen_name=ig.img_name, ds=ds, neuron_layout='hex',
-        de=de, l_n=6, n_itr=n_itr, lamb=0.0, tau=0.5,
+        de=de, l_n=7, n_itr=n_itr, lamb=0.0, tau=0.5,
         output_dir_base=args.output_dir)
     for _ in range(args.n_repeats):
         XR, YR, R = emb.gen_data(ig.img, print_mode=False)
         emb.run_inference_true_path(R, XR, YR)
         emb.save()
         emb.reset()
-#    for _ in range(n_repeats):
+#    for _ in range(args.n_repeats):
 #        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
 #        emb.run_em(R)
 #        emb.save()
