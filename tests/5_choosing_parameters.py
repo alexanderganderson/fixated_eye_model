@@ -13,6 +13,8 @@
 # tau - decay constant for summing hessian
 # n_p - number of particles for M
 
+from os.path import join
+
 import numpy as np
 from scipy.io import loadmat
 
@@ -57,6 +59,8 @@ n_p_ = [5, 20, 40]
 
 param_ = n_g_itr_
 param_name = 'n_g_itr'
+output_dir = join('parameter_cv', param_name)
+
 
 for param in param_:
     emb = EMBurak(
