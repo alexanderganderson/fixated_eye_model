@@ -95,6 +95,7 @@ class EMBurak(object):
         """
         self.data = {}
         self.save_mode = save_mode
+	self.print_mode = print_mode
 
         d = d.astype('float32')
 
