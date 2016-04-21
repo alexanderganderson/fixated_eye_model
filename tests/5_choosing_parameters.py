@@ -21,6 +21,8 @@ from utils.image_gen import ImageGenerator
 
 output_dir = 'parameter_cv'
 
+n_repeats = 20
+
 data = loadmat('sparse_coder/output/mnist_dictionary.mat')
 D = data['D']
 
@@ -49,7 +51,7 @@ motion_prior = {'mode': 'PositionDiffusion', 'dc': 20.}
 gamma_ = [1., 10., 100.]
 lamb_ = [0., 0.01, 0.1]
 fista_c_ = [0.3, 0.8, 1.5]
-n_g_itr_ = [5, 20, 40]
+n_g_itr_ = [20, 40, 60]
 n_itr_ = [5, 10, 20]
 tau_ = [0.05, 0.2, 0.5]
 n_p_ = [5, 20, 40]
@@ -62,9 +64,9 @@ for param in param_:
     emb = EMBurak(
         s_gen, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
         s_gen_name=s_gen_name, ds=0.57, neuron_layout='hex',
-        de=1.09, l_n=6, **{param_name: param})
-    for _ in range(10):
-        XR, YR, R = emb.gen_data(s_gen, print_mode=False)
+        de=1.09, l_n=6, print_mode=False, output_dir_base=output_dir, **{param_name: param})
+    for _ in range(n_repeats):
+        XR, YR, R = emb.gen_data(s_gen)
         emb.run_em(R)
         emb.save()
         emb.reset()
