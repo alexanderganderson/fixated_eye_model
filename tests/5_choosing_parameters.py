@@ -13,7 +13,7 @@
 # tau - decay constant for summing hessian
 # n_p - number of particles for M
 
-from os.path import join
+import os
 
 import numpy as np
 from scipy.io import loadmat
@@ -23,7 +23,7 @@ from utils.image_gen import ImageGenerator
 
 output_dir = 'parameter_cv'
 
-n_repeats = 20
+n_repeats = 30
 
 data = loadmat('sparse_coder/output/mnist_dictionary.mat')
 D = data['D']
@@ -43,8 +43,6 @@ s_gen = ig.img
 s_gen_name = ig.img_name
 
 n_t = 100
-LAMBDA = 0.0
-
 
 # motion_gen = {'mode': 'Experiment', 'fpath': 'data/paths.mat'}
 motion_gen = {'mode': 'Diffusion', 'dc': 20.}
@@ -54,14 +52,16 @@ gamma_ = [1., 10., 100.]
 lamb_ = [0., 0.01, 0.1]
 fista_c_ = [0.3, 0.8, 1.5]
 n_g_itr_ = [20, 40, 60]
-n_itr_ = [10, 20, 50]
+n_itr_ = [n_t / 10, n_t / 5, n_t / 2]
 tau_ = [0.05, 0.2, 0.5]
 n_p_ = [5, 20, 40]
+
+# os.mkdir('output/parameter_cv')
 
 param__ = [gamma_, lamb_, fista_c_, n_g_itr_, n_itr_, tau_, n_p_]
 param_name_ = ['gamma', 'lamb', 'fista_c', 'n_g_itr', 'n_itr', 'tau', 'n_p']
 for param_, param_name in zip(param__, param_name_):
-    output_dir = join('parameter_cv', param_name)
+    output_dir = os.path.join('parameter_cv', param_name)
     for param in param_:
         emb = EMBurak(
             s_gen, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,

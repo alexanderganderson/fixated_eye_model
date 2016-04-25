@@ -576,10 +576,10 @@ class EMBurak(object):
         if output_dir_base is None:
             output_dir_base = time_string()
         output_dir = os.path.join('output/', output_dir_base)
-        if not os.path.exists('output'):
-            os.mkdir('output')
+#        if not os.path.exists('output'):
+#            os.mkdir('output')
         if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
+            os.makedirs(output_dir)
         return output_dir
 
     def build_param_and_data_dict(self, s_gen, xr, yr, r):
