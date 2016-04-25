@@ -95,7 +95,7 @@ class EMBurak(object):
         """
         self.data = {}
         self.save_mode = save_mode
-	self.print_mode = print_mode
+        self.print_mode = print_mode
 
         d = d.astype('float32')
 
@@ -599,6 +599,7 @@ class EMBurak(object):
                      'L1': self.l1,
                      'GAMMA': self.gamma,
                      'lamb': self.lamb,
+                     'fista_c': self.fista_c,
                      'D': self.tc.t_D.get_value(),
                      'N_L': self.n_l,
                      'N_T': self.n_t,
