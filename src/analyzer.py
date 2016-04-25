@@ -46,7 +46,7 @@ def snr(p1, l1x, l1y, p2, l2x, l2y, var):
     ip11 = inner_product(p1, l1x, l1y, p1, l1x, l1y, var)
     ip22 = inner_product(p2, l2x, l2y, p2, l2x, l2y, var)
 
-    return ip11 / (ip11 + ip22 - 2 * ip12)  # , 1. / (1 - ip12 / np.sqrt(ip11 * ip22))
+    return ip11 / (ip11 + ip22 - 2 * ip12)
 
 
 class DataAnalyzer:
@@ -134,10 +134,10 @@ class DataAnalyzer:
             dy = 0.
         self.dx = dx
         self.dy = dy
-	i1 = self.S_gen.ravel()
-	i2 = s_est.ravel()
-	i1 = i1 / i1.max()
-	i2 = i2 / i2.max()
+        i1 = self.S_gen.ravel()
+        i2 = s_est.ravel()
+        i1 = i1 / i1.max()
+        i2 = i2 / i2.max()
         return snr(i1, self.xs, self.ys,
                    i2, self.xs + dx, self.ys + dy,
                    self.var)
@@ -543,6 +543,25 @@ def pf_plot(pf, t):
     yy = pf.XS[t, :, 1]
     ww = pf.WS[t, :]
     plt.scatter(xx, yy, s=ww * 5000)
+
+
+def plot_fill_between(t, data, label='', c=None, k=1.):
+    """
+    Create a plot of the data +/- k standard deviations.
+
+    Parameters
+    ----------
+    t : array, shape (timesteps, )
+        Times for each data point
+    data : array, shape (samples, timesteps)
+        Data to plot mean and +/- one sdev as a function of time
+    k : float
+        Scaling factor for standard deviations
+    """
+    mm = data.mean(0)
+    sd = data.std(0) * k
+    plt.fill_between(t, mm - sd, mm + sd, alpha=0.5, color=c)
+    plt.plot(t, mm, color=c, label=label)
 
 
 if __name__ == '__main__':
