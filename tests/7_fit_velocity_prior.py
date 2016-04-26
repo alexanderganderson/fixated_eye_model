@@ -36,7 +36,7 @@ motion_gen = {'mode': 'Experiment', 'fpath': 'data/paths.mat'}
 if len(args.dcv) is not len(args.v0):
     raise ValueError('Must have the same number of dcv and v0 values.')
 motion_prior_ = [{'mode': 'VelocityDiffusion', 'v0': v0, 'dcv': dcv}
-                 for v0, dcv in zip(args.dcv, args.v0)]
+                 for v0, dcv in zip(args.v0, args.dcv)]
 motion_prior_ += [{'mode': 'PositionDiffusion', 'dc': dc} for dc in args.dc]
 
 
