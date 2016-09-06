@@ -6,9 +6,9 @@ Main script.
 
 """
 
-import numpy as np
 import os
 import cPickle as pkl
+import numpy as np
 
 from utils.path_generator import (DiffusionPathGenerator,
                                   ExperimentalPathGenerator)
@@ -23,12 +23,12 @@ class EMBurak(object):
     """Produce spikes and infers the causes that generated those spikes."""
 
     def __init__(
-        self, s_gen, d, motion_gen, motion_prior,
-        dt=0.001, n_t=50, l_n=14, neuron_layout='sqr',
-        ds=1., de=1., lamb=0.,
-        tau=0.2, save_mode=False, n_itr=20, s_gen_name=' ',
-        output_dir_base='', n_g_itr=40, fista_c=0.8, n_p=20, print_mode=True,
-        gamma=10.
+            self, s_gen, d, motion_gen, motion_prior,
+            dt=0.001, n_t=50, l_n=14, neuron_layout='sqr',
+            ds=1., de=1., lamb=0.,
+            tau=0.2, save_mode=False, n_itr=20, s_gen_name=' ',
+            output_dir_base='', n_g_itr=40, fista_c=0.8, n_p=20,
+            print_mode=True, gamma=10.
     ):
         """
         Initialize the parts of the EM algorithm.
@@ -137,9 +137,8 @@ class EMBurak(object):
         # E Parameters (Particle Filter)
         self.n_p = n_p  # Number of particles for the EM
 
-        (self.n_n, XE, YE, IE, XS, YS, neuron_mode
-         ) = self.init_pix_rf_centers(l_n, self.l_i, ds, de,
-                                      mode=neuron_layout)
+        (self.n_n, XE, YE, IE, XS, YS) = self.init_pix_rf_centers(
+            l_n, self.l_i, ds, de, mode=neuron_layout)
 
         # Variances of Gaussians for each pixel
         var = np.ones((self.l_i,)).astype('float32') * (
@@ -274,7 +273,7 @@ class EMBurak(object):
         xs = ds * tmp.astype('float32')
         ys = ds * tmp.astype('float32')
 
-        return n_n, xe, ye, ie, xs, ys, mode
+        return n_n, xe, ye, ie, xs, ys
 
     def set_gain_factor(self, s_gen_shape):
         """
@@ -286,7 +285,7 @@ class EMBurak(object):
         g = 1.
         self.tc.set_gain_factor(g)
 
-        Ips, FP = self.tc.RFS(
+        Ips, _ = self.tc.RFS(
             np.ones(s_gen_shape).astype('float32'),
             np.zeros((1, self.n_t)).astype('float32'),
             np.zeros((1, self.n_t)).astype('float32'))
@@ -560,7 +559,8 @@ class EMBurak(object):
         if self.save_mode:
             self.data['EM_data'] = em_data
 
-    def init_output_dir(self, output_dir_base):
+    @staticmethod
+    def init_output_dir(output_dir_base):
         """
         Create the output directory: output/output_dir_base.
 
@@ -642,7 +642,7 @@ class EMBurak(object):
         """Calculate the inner products used."""
         self.Ips, self.FP = self.tc.RFS(s_gen, xr, yr)
 
-    """ Debug methods """
+    # Debug methods
 
     def get_hessian(self):
         """Return the hessian of the spike likelihood term."""

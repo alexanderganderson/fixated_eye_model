@@ -1,8 +1,8 @@
 """Code to generate an eye path."""
 
+import abc
 import numpy as np
 from scipy.io import loadmat
-import abc
 
 
 class Center:
@@ -60,7 +60,7 @@ class Center:
 
     def __str__(self):
         """Return a string giving the center."""
-        return str(self.x)
+        return str(self.m0)
 
 
 class PathGenerator():

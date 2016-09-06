@@ -3,6 +3,7 @@
 import numpy as np
 
 
+
 def gen_hex_lattice(w, a=1.):
     """
     Fill a circle centered at the origin with radius w

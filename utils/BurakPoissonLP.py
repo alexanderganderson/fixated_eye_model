@@ -1,5 +1,5 @@
 import numpy as np
-import particle_filter as PF
+import utils.particle_filter as PF
 
 # For the particle filter module, this class mediates the emission
 # probabilities
