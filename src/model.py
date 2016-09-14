@@ -137,6 +137,7 @@ class EMBurak(object):
         # E Parameters (Particle Filter)
         self.n_p = n_p  # Number of particles for the EM
 
+        self.neuron_layout = neuron_layout
         (self.n_n, XE, YE, IE, XS, YS) = self.init_pix_rf_centers(
             l_n, self.l_i, ds, de, mode=neuron_layout)
 
@@ -204,9 +205,6 @@ class EMBurak(object):
         if self.print_mode:
             print 'The mean firing rate is {:.2f}'.format(
                 r.mean() / self.dt)
-
-        self.pf.Y = r.transpose()  # Update reference to spikes for PF
-        # TODO: EWW
 
         if self.save_mode:
             self.build_param_and_data_dict(s_gen, xr, yr, r)
@@ -367,7 +365,15 @@ class EMBurak(object):
         """Reset the class between EM runs."""
         self.data = {}
         self.pf.reset()
+
         self.tc.reset()
+        # Reset the neuron grid
+        (self.n_n, XE, YE, IE, _, _) = self.init_pix_rf_centers(
+            self.l_n, self.l_i, self.ds, self.de, mode=self.neuron_layout)
+        self.tc.t_XE.set_value(XE)
+        self.tc.t_YE.set_value(YE)
+        self.tc.t_IE.set_value(IE)
+        self.pf = self.init_particle_filter(self.motion_prior, self.n_p)
 
     def run_e(self, t):
         """
@@ -499,7 +505,7 @@ class EMBurak(object):
             Number of gradient steps in M step
         """
         self.tc.reset()
-
+        self.pf.Y = r.T
         em_data = {}
 
         print 'Running full EM'

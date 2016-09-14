@@ -27,22 +27,22 @@ parser.add_argument('--dc', type=float, default=20.,
                     help='Diffusion Constant for eye motion')
 parser.add_argument('--image', type=str, default='e',
                     help='Digit type')
-parser.add_argument('--ds', type=float, default=0.5,
+parser.add_argument('--ds', type=float, default=0.4,
                     help='Pixel Spacing')
 
 args = parser.parse_args()
 
 n_itr = args.n_t / 5
 
-if args.image is 'e':
-    L_I = 14
+if args.image == 'e':
+    L_I = 20
     ig = ImageGenerator(L_I)
     ig.make_big_e()
     ig.normalize()
     D = np.eye(L_I ** 2)
     from utils.block_prior import block_prior
     D = 0.25 * block_prior(L_I / 2)
-elif args.image is 'mnist':
+elif args.image == 'mnist':
     # Sparse coding dictionary prior
     data = loadmat('sparse_coder/output/mnist_dictionary.mat')
     D = data['D']
@@ -54,33 +54,41 @@ elif args.image is 'mnist':
 else:
     raise ValueError('Unrecognized image: {}'.format(args.image))
 
-# {'mode': 'Experiment', 'fpath': 'data/paths.mat'},
-
 motion_info_ = [
-    ({'mode': 'Diffusion', 'dc': args.dc},
-     {'mode': 'PositionDiffusion', 'dc': args.dc}),
-    ({'mode': 'Diffusion', 'dc': 0.00001},
-     {'mode': 'PositionDiffusion', 'dc': 0.00001})]
+    #  ({'mode': 'Diffusion', 'dc': args.dc},
+    #   {'mode': 'PositionDiffusion', 'dc': args.dc}),
+    ({'mode': 'Diffusion', 'dc': 0.001},
+     {'mode': 'PositionDiffusion', 'dc': 20.}),
+    ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+     {'mode': 'PositionDiffusion', 'dc': 20.})
+]
+#  motion_info_ = motion_info_[1:2]
 
-ds_ = [args.ds]  # [0.57, 0.75, 1.]
+#  motion_info_ = [
+#      ({'mode': 'Diffusion', 'dc': 0.001},
+#       {'mode': 'PositionDiffusion', 'dc': dc_infer})
+#      for dc_infer in [0.01, 0.4, 2., 20., 100.]]
+
+#  ds_ = [args.ds]
+ds_ = [0.32, 0.4, 0.6]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
     emb = EMBurak(
         ig.img, D, motion_gen, motion_prior, n_t=args.n_t, save_mode=True,
-        s_gen_name=ig.img_name, ds=ds, neuron_layout='hex',
-        de=de, l_n=7, n_itr=n_itr, lamb=0.0, tau=0.5,
+        s_gen_name=ig.img_name, ds=ds, neuron_layout='hex', fista_c=0.8,
+        de=de, l_n=8, n_itr=n_itr, lamb=0.0, tau=1.28, n_g_itr=320,
         output_dir_base=args.output_dir)
+    #  for _ in range(args.n_repeats):
+    #      XR, YR, R = emb.gen_data(ig.img)
+    #      emb.run_inference_true_path(R, XR, YR)
+    #      emb.save()
+    #      emb.reset()
     for _ in range(args.n_repeats):
-        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
-        emb.run_inference_true_path(R, XR, YR)
+        XR, YR, R = emb.gen_data(ig.img)
+        emb.run_em(R)
         emb.save()
         emb.reset()
-#    for _ in range(args.n_repeats):
-#        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
-#        emb.run_em(R)
-#        emb.save()
-#        emb.reset()
 
 # convert -set delay 30 -colorspace GRAY
 # -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif

@@ -356,8 +356,8 @@ class ParticleFilter:
 
         self.check_dims()
 
-        self.Y = Y
-        self.N_T = self.Y.shape[0]
+        self.Y = None
+        self.N_T = Y.shape[0]
         self.N_P = N_P
 
         self.XS = np.zeros((self.N_T, self.N_P, self.D_H)).astype('float32')
@@ -402,6 +402,7 @@ class ParticleFilter:
         self.resample_times = []
         self.means[:, :] = 0.
         self.sdevs[:, :] = 0.
+        self.Y = None
 
     def resample_idx(self, W):
         """

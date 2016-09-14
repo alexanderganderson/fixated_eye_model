@@ -197,7 +197,7 @@ class DataAnalyzer:
         q - EM iteration number
         d - dimension to plot (0 or 1)
         """
-        if not self.data['motion_prior'] == 'VelocityDiffusion':
+        if not self.data['motion_prior']['mode'] == 'VelocityDiffusion':
             raise RuntimeError('No velocity for this motion prior')
 
         est_mean = self.data['EM_data'][q]['path_means']
@@ -231,7 +231,7 @@ class DataAnalyzer:
         q : int
             EM iteration to plot.
         """
-        if not self.data['motion_prior'] == 'VelocityDiffusion':
+        if not self.data['motion_prior']['mode'] == 'VelocityDiffusion':
             raise RuntimeError('Run has no velocity estimate')
 
         plt.subplot(2, 2, 1)
@@ -485,7 +485,6 @@ def _plot_image_and_rfs(xe, ye, de, xs, ys, ds, xr, yr, s_gen,
     s : float
         Size of markers for pixels in pix ** 2
     """
-    plt.figure(figsize=(5, 5))
     plt.scatter(xe, ye,
                 label='Neuron RF Centers, de={}'.format(de),
                 alpha=1.0)

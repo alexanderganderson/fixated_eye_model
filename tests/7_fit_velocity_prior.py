@@ -21,7 +21,7 @@ parser.add_argument('--v0', nargs='*', type=float, default=[],
                     help='Initial velocities for VDM')
 parser.add_argument('--dcv', nargs='*', type=float, default=[],
                     help='Velocity diffusion constants')
-parser.add_argument('--n_p', type=int, default=20,
+parser.add_argument('--n_p', type=int, default=80,
                     help='Number of particles for particle filter')
 
 args = parser.parse_args()
@@ -43,9 +43,9 @@ motion_prior_ += [{'mode': 'PositionDiffusion', 'dc': dc} for dc in args.dc]
 for motion_prior in motion_prior_:
     emb = EMBurak(
         ig.img, D, motion_gen, motion_prior, n_t=args.n_t, save_mode=True,
-        s_gen_name=ig.img_name, ds=0.57, neuron_layout='hex',
+        s_gen_name=ig.img_name, ds=0.45, neuron_layout='hex',
         de=1.09, l_n=6, print_mode=False, output_dir_base=args.output_dir,
-        n_p=args.n_p)
+        n_p=args.n_p, n_itr=args.n_t/2)
     for _ in range(args.n_repeats):
         XR, YR, R = emb.gen_data(ig.img)
         emb.run_em(R)

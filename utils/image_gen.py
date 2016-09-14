@@ -108,11 +108,12 @@ class ImageGenerator:
         self.img_name = 'E'
 
     def make_big_e(self):
-        """Make a two pixel thick E."""
-        self.img[2:4, 2:-2] = 1
-        self.img[self.l_i / 2 - 1: self.l_i / 2 + 1, 2:-2] = 1
-        self.img[-4:-2, 2:-2] = 1
-        self.img[2:-2, 2:4] = 1
+        """Make a two pixel thick E centered on the image."""
+        l = self.l_i
+        self.img[l/2-1:l/2+1, l/2-5:l/2+5] = 1
+        self.img[l/2-5:l/2-3, l/2-5:l/2+5] = 1
+        self.img[l/2+3:l/2+5, l/2-5:l/2+5] = 1
+        self.img[l/2-5:l/2+5, l/2-5:l/2-3] = 1
         self.img_name = 'bigE'
 
     def random(self):
