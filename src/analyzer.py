@@ -261,15 +261,18 @@ class DataAnalyzer:
         plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest')
         plt.colorbar()
 
-    def plot_base_image(self):
+    def plot_base_image(self, colorbar=True, alpha=1.,
+                        cmap=plt.cm.gray):
         """Plot the original image that generates the data."""
         res = _get_sum_gaussian_image(
             self.S_gen.ravel(), self.xs, self.ys,
             self.data['ds'] / np.sqrt(2), n=100)
-
-        plt.title('Stationary Object in the World')
-        plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest')
-        plt.colorbar()
+        a = self.data['ds'] * self.L_I / 2
+        plt.imshow(res, cmap=cmap, interpolation='nearest',
+                   extent=[-a, a, -a, a], alpha=alpha)
+        if colorbar:
+            plt.colorbar()
+            plt.title('Stationary Object in the World')
 
     def plot_em_estimate(self, q):
         """Visualize the results after iteration q."""
@@ -280,13 +283,13 @@ class DataAnalyzer:
         t_ms = self.DT * n_time_steps * 1000.
 
         fig = plt.figure(figsize=(12, 8))
-        fig.suptitle('EM Reconstruction after t = {}'.format(t_ms))
+        fig.suptitle('EM Reconstruction after t = {} ms'.format(t_ms))
 
-        plt.subplot(2, 3, 2)
-        self.plot_spikes(n_time_steps - 1, mode='ON')
+        ax = plt.subplot(2, 3, 2)
+        self.plot_spikes(ax, n_time_steps - 1, mode='ON')
 
-        plt.subplot(2, 3, 3)
-        self.plot_spikes(n_time_steps - 1, mode='OFF')
+        ax = plt.subplot(2, 3, 3)
+        self.plot_spikes(ax, n_time_steps - 1, mode='OFF')
 
         plt.subplot(2, 3, 4)
         self.plot_image_estimate(q)
@@ -326,7 +329,7 @@ class DataAnalyzer:
 
         self.rav = rav / self.DT
 
-    def plot_spikes(self, t, moving_average=True, mode='ON'):
+    def plot_spikes(self, ax, t, moving_average=True, mode='ON'):
         """
         Plot the spiking profile at timestep number t.
 
@@ -343,28 +346,31 @@ class DataAnalyzer:
         else:
             s = self.R[:, t]
 
-        # FIXME: broken for hexagonal grid
-        nn = self.L_N ** 2 * 2
-        if mode == 'OFF':
-            spikes = s[0: nn / 2]
-        elif mode == 'ON':
-            spikes = s[nn / 2: nn]
-        else:
-            raise ValueError('mode must be ON or OFF')
+        xe, ye, ie = self.data['XE'], self.data['YE'], self.data['IE']
+        de = self.data['de']
+        ON, OFF = 0, 1
 
-        vmin = 0.
-        vmax = 200.
+        def normalize(s0, mm=4 * self.data['L1']):
+            if s0 < mm:
+                return s0 / (1.0 * mm)
+            else:
+                return 1.
 
+        for x, y, i, s0 in zip(xe, ye, ie, s):
+            if i == ON  and mode == 'OFF':
+                continue
+            if i == OFF and mode == 'ON':
+                continue
+            alpha = normalize(s0)
+            ax.add_patch(plt.Circle((x, y), de * 0.203, alpha=alpha))
         if moving_average:
             st = 'Spike ExpMA'
         else:
             st = 'Spikes'
-
-        plt.imshow(spikes.reshape(self.L_N, self.L_N),
-                   interpolation='nearest', cmap=plt.cm.gray_r,
-                   vmin=vmin, vmax=vmax)
-        plt.title('{} for {} Cells at time {}'.format(st, mode, t))
-#        plt.colorbar()
+        ax.set_title('{} for {} Cells at time {}'.format(st, mode, t))
+        m = max(max(xe), max(ye))
+        ax.set_xlim([-m, m])
+        ax.set_ylim([-m, m])
 
     def plot_firing_rates(self, t, mode='ON'):
         """
@@ -407,11 +413,11 @@ class DataAnalyzer:
         plt.title('Retinal Image')
 
         # Spikes
-        plt.subplot(2, 2, 3)
-        self.plot_spikes(t, mode='ON', moving_average=True)
+        ax = plt.subplot(2, 2, 3)
+        self.plot_spikes(ax, t, mode='ON', moving_average=True)
 
-        plt.subplot(2, 2, 4)
-        self.plot_spikes(t, mode='OFF', moving_average=True)
+        ax = plt.subplot(2, 2, 4)
+        self.plot_spikes(ax, t, mode='OFF', moving_average=True)
 
     def plot_rfs(self):
         """Create a plot of the receptive fields of the neurons."""
@@ -458,43 +464,46 @@ class DataAnalyzer:
                 output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
-    def plot_image_and_rfs(self, s=150):
+    def plot_image_and_rfs(self):
         """Plot the image with the neuron RF centers."""
-        _plot_image_and_rfs(
+        self.plot_base_image(colorbar=False, alpha=1.,
+                            cmap=plt.cm.gray_r)
+        _plot_rfs_and_path(
             self.data['XE'], self.data['YE'], self.data['de'],
-            self.xs, self.ys, self.data['ds'],
-            self.xr, self.yr,
-            self.data['S_gen'], s)
+            self.xr, self.yr)
 
 
-def _plot_image_and_rfs(xe, ye, de, xs, ys, ds, xr, yr, s_gen,
-                        s=150):
+
+def _plot_rfs_and_path(xe, ye, de, xr, yr):
     """
     Plot the image and the receptive fields.
 
     xe, ye: array, shape (n_n,)
         Neuron RF centers
-    xs, ys: array, shape (l_i ** 2,)
-        Locations of pixel centers
     xr, yr: array, shape (1, n_t)
         Location of eye at time t
-    de, ds : float
-        Neuron, pixel spacing
-    S_gen : array, shape (l_i ** 2,)
-        Values of pixels
-    s : float
-        Size of markers for pixels in pix ** 2
+    de: float
+        Neuron spacing
     """
-    plt.scatter(xe, ye,
-                label='Neuron RF Centers, de={}'.format(de),
-                alpha=1.0)
-    plt.scatter(xs, -ys, c=s_gen.ravel(), cmap=plt.cm.gray_r,
-                label='Pixel Centers, ds={}'.format(ds), s=s, alpha=0.5)
-    plt.axes().set_aspect('equal')
-    if xr is not None and yr is not None:
-        plt.plot(xr[::5], yr[::5], label='Eye path', c='g')
-    plt.legend()
+    ax = plt.axes()
+    ax.set_aspect('equal')
+    # FIXME: HARD CODED 2x
+    r = 0.203 * de
+    for i, (x, y) in enumerate(zip(xe, ye)):
+        if i == 0:
+            label = 'One SDev of Neuron RF'
+        else:
+            label = None
+        ax.add_patch(plt.Circle((x, y), r, color='gray', fill=True, alpha=0.10,
+                                label=label))
+    #  plt.scatter(xe, ye, alpha=0.5, label='Neuron RF Centers, de={}'.format(de))
 
+    if xr is not None and yr is not None:
+        plt.plot(xr, yr, label='Eye path', c='g')
+
+    plt.legend()
+    plt.xlabel('x (arcmin)')
+    plt.ylabel('y (arcmin)')
 
 def _get_sum_gaussian_image(s_gen, xs, ys, sdev, n=50):
     """
