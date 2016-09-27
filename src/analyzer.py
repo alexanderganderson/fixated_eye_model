@@ -257,8 +257,10 @@ class DataAnalyzer:
             self.data['ds'] / np.sqrt(2), n=100)
         plt.title('Estimated Image, S = DA:\n SNR = %.2f'
                   % self.snr_one_iteration(q))
-
-        plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest')
+        # FIXME: extent calculation could break in future
+        a = self.data['ds'] * self.L_I / 2
+        plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest',
+                   extent=[-a, a, -a, a])
         plt.colorbar()
 
     def plot_base_image(self, colorbar=True, alpha=1.,
@@ -446,7 +448,7 @@ class DataAnalyzer:
         plt.plot(x, baseline_rate + 0 * x, '--')
         plt.xlabel('Stimulus intensity')
         plt.ylabel('Firing Rate (Hz)')
-        plt.title('Firing rate as a function of Stimulus Intensity')
+        plt.title('Firing rate as a function \n of Stimulus Intensity')
         plt.legend()
 
     def save_em_jpgs(self, output_dir, tag):

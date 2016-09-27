@@ -57,20 +57,21 @@ else:
 motion_info_ = [
     #  ({'mode': 'Diffusion', 'dc': args.dc},
     #   {'mode': 'PositionDiffusion', 'dc': args.dc}),
-    ({'mode': 'Diffusion', 'dc': 0.001},
+    ({'mode': 'Diffusion', 'dc': 0.0001},
      {'mode': 'PositionDiffusion', 'dc': 20.}),
     ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
      {'mode': 'PositionDiffusion', 'dc': 20.})
 ]
-#  motion_info_ = motion_info_[1:2]
 
+motion_info_ = motion_info_[1:2]
 #  motion_info_ = [
 #      ({'mode': 'Diffusion', 'dc': 0.001},
 #       {'mode': 'PositionDiffusion', 'dc': dc_infer})
 #      for dc_infer in [0.01, 0.4, 2., 20., 100.]]
 
 #  ds_ = [args.ds]
-ds_ = [0.32, 0.4, 0.6]
+#  ds_ = [0.32, 0.4, 0.6]
+ds_ = [0.40]
 de = 1.09
 
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):

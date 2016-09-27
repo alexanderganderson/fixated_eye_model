@@ -13,9 +13,11 @@ from scipy.io import loadmat
 
 from src.model import EMBurak
 from utils.image_gen import ImageGenerator
-output_dir = 'sparsity_new'
+output_dir = 'sparsity'
 n_t = 200
 n_repeats = 20
+n_itr = n_t / 2
+
 
 # Sparse coding dictionary prior
 data1 = loadmat('sparse_coder/output/mnist_dictionary.mat')
@@ -40,17 +42,19 @@ D0 = np.eye((L_I ** 2))
 motion_gen = {'mode': 'Diffusion', 'dc': 100.}
 motion_prior = {'mode': 'PositionDiffusion', 'dc': 100.}
 
-for D in [D0, D1, D2]:
-    emb = EMBurak(
-        ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
-        s_gen_name=ig.img_name, ds=1., neuron_layout='sqr',
-        de=1., l_n=18, n_itr=100, lamb=0.0, tau=0.05,
-        output_dir_base=output_dir)
-    for _ in range(n_repeats):
-        XR, YR, R = emb.gen_data(ig.img, print_mode=False)
-        emb.run_em(R)
-        emb.save()
-        emb.reset()
+for ds in [0.5, 0.7, 1.0]:
+    for D, D_name in zip([D0, D1, D2], ['Indep', 'Sparse', 'Non-sparse']):
+        emb = EMBurak(
+            ig.img, D, motion_gen, motion_prior, n_t=n_t, save_mode=True,
+            s_gen_name=ig.img_name, ds=ds, neuron_layout='sqr',
+            de=1., l_n=18, n_itr=n_itr, lamb=0.0, tau=1.28, n_g_itr=320,
+            output_dir_base=output_dir)
+        for _ in range(n_repeats):
+            XR, YR, R = emb.gen_data(ig.img)
+            emb.data['D_name'] = D_name
+            emb.run_em(R)
+            emb.save()
+            emb.reset()
 
 
 # convert -set delay 30 -colorspace GRAY
