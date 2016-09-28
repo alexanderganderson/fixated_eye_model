@@ -296,8 +296,10 @@ class DataAnalyzer:
         plt.subplot(2, 3, 4)
         self.plot_image_estimate(q)
 
-        plt.subplot(2, 3, 1)
-        self.plot_base_image()
+        ax = plt.subplot(2, 3, 1)
+        #  self.plot_base_image()
+        self.plot_image_and_rfs(ax=ax, legend=False)
+        plt.title('Image with Cone RFs and Path')
 
         plt.subplot(2, 3, 5)
         self.plot_path_estimate(q, 0)
@@ -466,17 +468,19 @@ class DataAnalyzer:
                 output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
-    def plot_image_and_rfs(self):
+    def plot_image_and_rfs(self, ax=None, legend=True):
         """Plot the image with the neuron RF centers."""
+        if ax is None:
+            ax = plt.axes()
         self.plot_base_image(colorbar=False, alpha=1.,
                             cmap=plt.cm.gray_r)
         _plot_rfs_and_path(
-            self.data['XE'], self.data['YE'], self.data['de'],
-            self.xr, self.yr)
+            ax, self.data['XE'], self.data['YE'], self.data['de'],
+            self.xr, self.yr, legend)
 
 
 
-def _plot_rfs_and_path(xe, ye, de, xr, yr):
+def _plot_rfs_and_path(ax, xe, ye, de, xr, yr, legend):
     """
     Plot the image and the receptive fields.
 
@@ -487,7 +491,7 @@ def _plot_rfs_and_path(xe, ye, de, xr, yr):
     de: float
         Neuron spacing
     """
-    ax = plt.axes()
+    #  ax = plt.axes()
     ax.set_aspect('equal')
     # FIXME: HARD CODED 2x
     r = 0.203 * de
@@ -502,10 +506,10 @@ def _plot_rfs_and_path(xe, ye, de, xr, yr):
 
     if xr is not None and yr is not None:
         plt.plot(xr, yr, label='Eye path', c='g')
-
-    plt.legend()
-    plt.xlabel('x (arcmin)')
-    plt.ylabel('y (arcmin)')
+    if legend:
+        plt.legend()
+        plt.xlabel('x (arcmin)')
+        plt.ylabel('y (arcmin)')
 
 def _get_sum_gaussian_image(s_gen, xs, ys, sdev, n=50):
     """

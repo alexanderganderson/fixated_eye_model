@@ -57,13 +57,13 @@ else:
 motion_info_ = [
     #  ({'mode': 'Diffusion', 'dc': args.dc},
     #   {'mode': 'PositionDiffusion', 'dc': args.dc}),
-    ({'mode': 'Diffusion', 'dc': 0.0001},
-     {'mode': 'PositionDiffusion', 'dc': 20.}),
     ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+     {'mode': 'PositionDiffusion', 'dc': 20.}),
+    ({'mode': 'Diffusion', 'dc': 0.0001},
      {'mode': 'PositionDiffusion', 'dc': 20.})
 ]
 
-motion_info_ = motion_info_[1:2]
+#  motion_info_ = motion_info_[1:2]
 #  motion_info_ = [
 #      ({'mode': 'Diffusion', 'dc': 0.001},
 #       {'mode': 'PositionDiffusion', 'dc': dc_infer})
