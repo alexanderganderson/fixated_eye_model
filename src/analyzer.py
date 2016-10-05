@@ -105,7 +105,7 @@ class DataAnalyzer:
         data = pkl.load(open(filename, 'rb'))
         return cls(data)
 
-    def snr_one_iteration(self, q):
+    def snr_one_iteration(self, q, img=None):
         """
         Calculate the SNR of the estimated image and the true image.
 
@@ -134,7 +134,9 @@ class DataAnalyzer:
             dy = 0.
         self.dx = dx
         self.dy = dy
-        i1 = self.S_gen.ravel()
+        if img is None:
+            img = self.S_gen
+        i1 = img.ravel()
         i2 = s_est.ravel()
         i1 = i1 / i1.max()
         i2 = i2 / i2.max()

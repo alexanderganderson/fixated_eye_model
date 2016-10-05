@@ -66,7 +66,7 @@ class ImageGenerator:
             print e
             raise IOError(e)
 
-    def make_gabor(self, x0=0., y0=0., k=None,
+    def make_gabor(self, x0=0., y0=0., f=None,
                    eta=np.pi / 4., phi=0., sig=None):
         """
         Make a Gabor.
@@ -74,23 +74,25 @@ class ImageGenerator:
         Parameters:
         x0, y0: float
             Gabor center relative to the center of the image
-        k : float
-            Frequency amplitude
+        f : float
+            Frequency
         eta : float
             Frequency angle
         phi : float
             Phase
         img(x,y) = A * Exp( -((x-x0)^2 + (y-y0)^2)/sig ** 2) * Cos(kx + phi)
         kx = k (cos eta, sin eta) * (x, y)
+        k = 2 * pi * f
         """
-        if k is None:
-            k = 4. * np.pi / self.l_i
+        if f is None:
+            f = 2. / self.l_i
         if sig is None:
             sig = self.l_i / 3.
 
         tmp = np.arange(-self.l_i / 2, self.l_i / 2)
         X, Y = np.meshgrid(tmp, tmp)
 
+        k = 2 * np.pi * f
         k1 = k * np.cos(eta)
         k2 = k * np.sin(eta)
 
@@ -98,6 +100,7 @@ class ImageGenerator:
                     np.sin(phi + k1 * X + k2 * Y))
         self.img_name = 'gabor'
         self.normalize()
+        self.img = self.img.astype('float32')
 
     def make_e(self):
         """Make a one pixel thick E."""
