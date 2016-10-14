@@ -502,7 +502,7 @@ def _plot_rfs_and_path(ax, xe, ye, de, xr, yr, legend):
             label = 'One SDev of Neuron RF'
         else:
             label = None
-        ax.add_patch(plt.Circle((x, y), r, color='gray', fill=True, alpha=0.10,
+        ax.add_patch(plt.Circle((x, y), r, color='red', fill=True, alpha=0.10,
                                 label=label))
     #  plt.scatter(xe, ye, alpha=0.5, label='Neuron RF Centers, de={}'.format(de))
 

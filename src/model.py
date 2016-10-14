@@ -25,10 +25,11 @@ class EMBurak(object):
     def __init__(
             self, s_gen, d, motion_gen, motion_prior,
             dt=0.001, n_t=50, l_n=14, neuron_layout='sqr',
+            l0=10., l1=100.,
             ds=1., de=1., lamb=0.,
             tau=1.28, save_mode=False, n_itr=20, s_gen_name=' ',
             output_dir_base='', n_g_itr=40, fista_c=0.8, n_p=20,
-            print_mode=True, gamma=10.
+            print_mode=True, gamma=10., s_range='pos'
     ):
         """
         Initialize the parts of the EM algorithm.
@@ -97,6 +98,15 @@ class EMBurak(object):
         self.save_mode = save_mode
         self.print_mode = print_mode
 
+        if s_range == 'pos':
+            smin, smax = 0, 1
+            pos_only = True
+        elif s_range == 'sym':
+            smin, smax = -0.5, 0.5
+            pos_only = False
+        else:
+            raise ValueError('Invalid s_range {}'.format(s_range))
+
         d = d.astype('float32')
 
         s_gen = s_gen.astype('float32')
@@ -108,8 +118,8 @@ class EMBurak(object):
 
         # Simulation Parameters
         self.dt = dt  # Simulation timestep
-        self.l0 = 10.
-        self.l1 = 100.
+        self.l0 = l0
+        self.l1 = l1
 
         # Problem Dimensions
         self.n_t = n_t  # Number of time steps
@@ -148,7 +158,8 @@ class EMBurak(object):
         self.tc = TheanoBackend(
             XS, YS, XE, YE, IE, var,
             d, self.l0, self.l1, self.dt, 1.,
-            self.gamma, self.lamb, self.tau)
+            self.gamma, self.lamb, self.tau, pos_only=pos_only,
+            SMIN=smin, SMAX=smax)
         self.set_gain_factor(s_gen.shape)
 
         if motion_gen['mode'] == 'Diffusion':

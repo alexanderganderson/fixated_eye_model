@@ -3,11 +3,13 @@ import numpy as np
 # import matplotlib.pyplot as plt
 from scipy.io import loadmat
 
-# sys.path.append('..')
-
 from src.model import EMBurak
 from src.analyzer import DataAnalyzer
 from utils.image_gen import ImageGenerator
+
+run_analyzer = False
+check_gradient = True
+
 
 # Tests the algorithm using a '0' from mnist and a sparse coding dictionary
 
@@ -29,21 +31,48 @@ s_gen_name = ig.img_name
 motion_gen = {'mode': 'Diffusion', 'dc': 100.}
 motion_prior = {'mode': 'PositionDiffusion', 'dc': 100.}
 
-emb = EMBurak(s_gen, D, motion_gen, motion_prior, n_t=50, save_mode=True,
-              s_gen_name=s_gen_name, n_itr=10, lamb=0.0)
+emb = EMBurak(s_gen - 0.5, D, motion_gen, motion_prior, n_t=10, save_mode=True,
+              s_gen_name=s_gen_name, n_itr=10, lamb=0.0, s_range='sym')
 XR, YR, R = emb.gen_data(s_gen)
+
 
 emb.run_em(R)
 
 
-# emb.save()
+    # emb.save()
 
-da = DataAnalyzer(emb.data)
-da.plot_em_estimate(0)
-print da.snr_list()
-print da.time_list()
+if run_analyzer:
+    da = DataAnalyzer(emb.data)
+    da.plot_em_estimate(0)
+    print da.snr_list()
+    print da.time_list()
 
-da.plot_image_and_rfs(s=50)
+    da.plot_image_and_rfs(s=50)
+
+if check_gradient:
+    from utils.gradient_checker import hessian_check
+
+    def f(A):
+       emb.tc.t_A.set_value(A.astype('float32'))
+       return emb.get_spike_cost(R)
+
+
+    def fpp(A):
+       emb.tc.t_A.set_value(A.astype('float32'))
+       return emb.get_hessian()
+
+    x0 = emb.tc.get_A()
+    #  x0 = np.random.randn(D.shape[0]) * 10
+    #  import pdb; pdb.set_trace()
+    for _ in range(10):
+       u, v = hessian_check(f, fpp, (D.shape[0],), x0=x0)
+       print u, v
+
+
+    #  import pdb; pdb.set_trace()
+
+
+
 
 
 # # Plot the Estimated Image and Path after the algorithm ran

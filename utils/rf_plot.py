@@ -1,4 +1,4 @@
-"""Function to plot the receptive fields of a matrix."""
+"Function to plot the receptive fields of a matrix."""
 
 import numpy as np
 import matplotlib.pyplot as plt

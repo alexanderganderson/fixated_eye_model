@@ -3,7 +3,7 @@
 import numpy as np
 import theano
 import theano.tensor as T
-from utils.fista import fista_updates
+from sparse_coder.fista import fista_updates
 
 
 def reset_shared_var(t_S):
@@ -72,7 +72,7 @@ def inner_products(t_S, t_Var, t_XS, t_YS, t_XE, t_YE, t_XR, t_YR):
     return t_Ips, t_PixRFCoupling
 
 
-def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
+def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_SMIN, t_SMAX, t_DT):
     # Firing probabilities indexed by b, j, t
     # t_Ips - Image-RF inner products indexed as b, j, t
     # t_G - gain constant
@@ -81,7 +81,8 @@ def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
     # t_DT - time step size
 
     t_IEr = t_IE.dimshuffle('x', 0, 'x')
-    t_Gen = t_IEr + (1 - 2 * t_IEr) * t_G * t_Ips  # Generator signal
+    t_Gen = t_IEr + (1 - 2 * t_IEr) * (
+        (t_G * t_Ips - t_SMIN) / (t_SMAX - t_SMIN)) # Generator signal
 
     t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
 
@@ -89,7 +90,7 @@ def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_DT):
     return t_FP
 
 
-def dlogfp_dA(t_dIpsdA, t_G, t_IE, t_L0, t_L1):
+def dlogfp_dA(t_dIpsdA, t_G, t_IE, t_L0, t_L1, t_SMIN, t_SMAX):
     """
     t_dIpsdA - d Ips / dA indexed as b, k, j, t
     t_G - gain constant
@@ -100,7 +101,7 @@ def dlogfp_dA(t_dIpsdA, t_G, t_IE, t_L0, t_L1):
     """
     t_IEr = t_IE.dimshuffle('x', 'x', 0, 'x')
     # t_dGen_dA = t_IEr + (1 - 2 * t_IEr) * t_G * t_dIpsdA
-    t_dGen_dA = (1 - 2 * t_IEr) * t_G * t_dIpsdA
+    t_dGen_dA = (1 - 2 * t_IEr) * t_G * t_dIpsdA / (t_SMAX - t_SMIN)
     t_dlogFPdA = T.log(t_L1 / t_L0) * t_dGen_dA
 
     return t_dlogFPdA
@@ -131,7 +132,8 @@ class TheanoBackend(object):
     """
 
     def __init__(self, XS, YS, XE, YE, IE, Var, d,
-                 l0, l1, DT, G, GAMMA, LAMBDA, TAU, pos_only=True):
+                 l0, l1, DT, G, GAMMA, LAMBDA, TAU, pos_only=True,
+                 SMIN=0., SMAX=1.):
         """
         Initializes all theano variables and functions
         """
@@ -156,6 +158,8 @@ class TheanoBackend(object):
         self.t_DT = theano.shared(np.float32(DT), 'DT')
         self.t_G = theano.shared(np.float32(G), 'G')
         self.t_TAU = theano.shared(np.float32(TAU), 'TAU')
+        self.t_SMIN = theano.shared(np.float32(SMIN), 'SMIN')
+        self.t_SMAX = theano.shared(np.float32(SMAX), 'SMAX')
 
         ##############################
         # Simulated Spike Generation #
@@ -167,7 +171,8 @@ class TheanoBackend(object):
                                            self.t_XE, self.t_YE,
                                            self.t_XR, self.t_YR)
         self.t_FP_gen = firing_prob(self.t_Ips_gen, self.t_G, self.t_IE,
-                                    self.t_L0, self.t_L1, self.t_DT)
+                                    self.t_L0, self.t_L1, self.t_SMIN,
+                                    self.t_SMAX, self.t_DT)
 
         # Computes image-RF inner products and the resulting firing
         # probabilities
@@ -187,7 +192,7 @@ class TheanoBackend(object):
         # Latent Variable Estimation #
         ##############################
 
-        self.spiking_cost = spiking_cost
+        #  self.spiking_cost = spiking_cost
 
         # Current value of A
         self.t_A = theano.shared(
@@ -220,7 +225,8 @@ class TheanoBackend(object):
             self.t_XE, self.t_YE, self.t_XR, self.t_YR)
 
         self.t_FP = firing_prob(self.t_Ips, self.t_G, self.t_IE,
-                                self.t_L0, self.t_L1, self.t_DT)
+                                self.t_L0, self.t_L1,
+                                self.t_SMIN, self.t_SMAX, self.t_DT)
 
         # Define Hessian
         # Reshape dictionary for computing derivative: k, i2, i1
@@ -236,7 +242,8 @@ class TheanoBackend(object):
 
         # b, k, j, t
         t_dlogFPdA = dlogfp_dA(
-            t_SpRFCoupling, self.t_G, self.t_IE, self.t_L0, self.t_L1)
+            t_SpRFCoupling, self.t_G, self.t_IE, self.t_L0, self.t_L1,
+            self.t_SMIN, self.t_SMAX)
 
         # b, k, k', j, t -> k, k'
         t_dE_R_dAA = (
@@ -258,8 +265,10 @@ class TheanoBackend(object):
         self.t_E_R.name = 'E_R'
 
         self.t_E_bound = self.t_GAMMA * (
-            T.sum(T.switch(self.t_S < 0., -self.t_S, 0)) +
-            T.sum(T.switch(self.t_S > 1., self.t_S - 1, 0)))
+            T.sum(T.switch(self.t_S < self.t_SMIN,
+                           -(self.t_S - self.t_SMIN), 0.)) +
+            T.sum(T.switch(self.t_S > self.t_SMAX,
+                           self.t_S - self.t_SMAX, 0.)))
         self.t_E_bound.name = 'E_bound'
 
         self.t_E_sp = self.t_LAMBDA * T.sum(T.abs_(self.t_A))
