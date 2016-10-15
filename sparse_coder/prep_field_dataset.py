@@ -29,7 +29,7 @@ def get_data_matrix(path=None, l_patch=20):
 
     std_thresh = IMAGES.std() * 0.5
 
-    data = extract_patches(IMAGES, n_patches, l_patch, std_thresh)
+    data = _extract_patches(IMAGES, n_patches, l_patch, std_thresh)
     return data
 
 
