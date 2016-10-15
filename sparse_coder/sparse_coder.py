@@ -9,6 +9,29 @@ import theano.tensor as T
 from fista import fista_updates, ista_updates
 
 
+def get_effective_dimensionality(data, var_thresh=0.9):
+    """
+    Get the effective dimensionality of a dataset using PCA.
+
+    Parameters
+    ----------
+    data : array, shape (n_images, n_features)
+        Data to be analyzed.
+    var_thresh : float
+        Percent of total variance to cut the dimensionality.
+
+    Returns
+    -------
+    d_eff : int
+        Effective dimensionality of the data.
+    """
+    IM_cov = np.cov(data.T)
+    evals, evecs = eigh(IM_cov)
+    cs = np.cumsum(evals[::-1])
+    d_eff = np.argmax(cs > cs[-1] * var_thresh) # Effective Dim of data
+    return d_eff
+
+
 class SparseCoder(object):
     """
     Create a sparse code on a set of data.
@@ -258,6 +281,51 @@ class TheanoBackend(object):
     def get_coefficients(self):
         return self.t_A.get_value()
 
+    def plot_example(self, q, i_idx, L_pat=l_patch, ax=None):
+        A = self.tc.get_coefficients()
+        D = self.tc.get_dictionary()
+        Ih = np.dot(A, D)
+        I = self.tc.t_DATA.get_value()[i_idx]
+        A = A[q]
+        Ih = Ih[q]
+        I = I[q]
+        n_sp = D.shape[0]
 
+        snr = (I ** 2).sum() / ((I - Ih) ** 2).sum()
+
+        vmin = I.min()
+        vmax = I.max()
+
+        if ax is None:
+            ax = plt.figure(figsize=(12, 10))
+        plt.subplot(2, 2, 1)
+        plt.title('Reconstruction: SNR: {:.2f}'.format(snr))
+        plt.imshow(Ih.reshape(L_pat, L_pat),
+                   interpolation='nearest',
+                   cmap = plt.cm.gray, vmin=vmin, vmax=vmax)
+        plt.colorbar()
+        plt.subplot(2, 2, 2)
+        plt.title('Orignal Image')
+        plt.imshow(I.reshape(L_pat, L_pat),
+                   interpolation='nearest',
+                   cmap = plt.cm.gray, vmin=vmin, vmax=vmax)
+        plt.colorbar()
+        plt.subplot(2, 2, 3)
+
+        plt.hist(A, bins=40)
+
+        sort_idx = np.argsort(np.abs(A))[::-1]
+        n_active = np.sum(np.abs(A) > 0.2)
+        active_idx = sort_idx[0:n_active]
+
+        plt.title('Histogram of sparse Coefficients: \n Percentage of active coefficients {:.0f}%'.format(
+                100. * n_active / n_sp))
+        plt.xlabel('Coefficient Activity')
+
+        plt.subplot(2, 2, 4)
+        show_fields(D[active_idx] *
+                    A[active_idx][:, np.newaxis],
+                    cmap = plt.cm.gray, pos_only = False)
+        plt.title('Active Dictionary Elements \n Scaled by their activations')
 
 
