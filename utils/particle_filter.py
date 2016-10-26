@@ -434,7 +434,10 @@ class ParticleFilter:
                 i = i + 1
         return idx
 
-    def advance(self):
+    def get_current_positions_and_weights(self):
+        pass
+
+    def advance(self, Y=None):
         """
 
         Advances the particle filter one timestep
@@ -442,23 +445,26 @@ class ParticleFilter:
         Performs a resampling if the effective sample size becomes
             less than have the number of particles
         """
-
+        if self.t >= self.N_T:
+            raise StopIteration('Particle filter has run to completion')
+        if Y is None:
+            Y = self.Y[self.t]
         if (self.t == 0):
-            self.XS[0] = self.ipd.sample(self.Y[0], self.N_P)
+            self.XS[0] = self.ipd.sample(Y, self.N_P)
             self.WS[0] = (self.ip.prob(self.XS[0])
-                          * self.lp.prob(self.Y[0], self.XS[0])
-                          / self.ipd.prob(self.XS[0], self.Y[0])
+                          * self.lp.prob(Y, self.XS[0])
+                          / self.ipd.prob(self.XS[0], Y)
                           )
             self.WS[0] = self.WS[0] / np.sum(self.WS[0])
             self.t = self.t + 1
 
         elif (self.t < self.N_T):
             i = self.t
-            self.XS[i] = self.tpd.sample(self.Y[i], self.XS[i - 1])
+            self.XS[i] = self.tpd.sample(Y, self.XS[i - 1])
             self.WS[i] = (self.WS[i - 1]
-                          * self.lp.prob(self.Y[i], self.XS[i])
+                          * self.lp.prob(Y, self.XS[i])
                           * self.tp.prob(self.XS[i], self.XS[i - 1])
-                          / self.tpd.prob(self.XS[i], self.Y[i], self.XS[i-1])
+                          / self.tpd.prob(self.XS[i], Y, self.XS[i-1])
                           )
             self.WS[i] = self.WS[i] / np.sum(self.WS[i])
             if (np.sum(self.WS[i] ** 2) ** (-1) < self.N_P / 2.):
