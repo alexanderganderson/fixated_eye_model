@@ -3,7 +3,7 @@
 import os
 import numpy as np
 
-def get_data_matrix(path=None, l_patch=20):
+def get_data_matrix(path=None, l_patch=20, n_patches=None, seed=123):
     """
     Return a data matrix of randomly sampled patches.
 
@@ -11,8 +11,10 @@ def get_data_matrix(path=None, l_patch=20):
     ----------
     path : str
         Path to IMAGES.npy
-    l_patch :
+    l_patch : int
         Size of patches to extract.
+    n_patches : int
+        Number of patches to extract.
 
     Returns
     -------
@@ -25,10 +27,11 @@ def get_data_matrix(path=None, l_patch=20):
         path = os.path.join(data_dir, filename)
     IMAGES = np.load(path)
 
-    n_patches = int(IMAGES.size / l_patch ** 2 * 10)
+    if n_patches is None:
+        n_patches = int(IMAGES.size / l_patch ** 2 * 10)
 
     std_thresh = IMAGES.std() * 0.5
-
+    np.random.seed(seed=seed)
     data = _extract_patches(IMAGES, n_patches, l_patch, std_thresh)
     return data
 

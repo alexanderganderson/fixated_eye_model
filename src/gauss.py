@@ -525,6 +525,7 @@ class TFBackend(object):
         self.t_xs = t_xs
         self.t_ys = t_ys
         self.t_xe = t_xe
+        self.t_ye = t_ye
         self.t_var_s = t_var_s
         self.t_var_m = t_var_m
         self.t_xr_gen = t_xr_gen
