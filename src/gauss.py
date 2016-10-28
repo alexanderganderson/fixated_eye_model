@@ -29,14 +29,15 @@ class EMGauss(object):
         xs, ys, n_pix = self.init_pix_centers(l_i=l_i, ds=ds)
         xe, ye, n_n = self.init_rf_centers(mode=neuron_layout, l_n=l_n, de=de)
 
-        var_s = np.ones((l_i,), dtype='float32') * (
+        # FIMXE: make i,j tensor
+        var_s = np.ones((1,), dtype='float32') * (
             (0.5 * ds) ** 2 + (0.203 * de) ** 2)
         var_m = np.ones((n_n,), dtype='float32') * sig_obs ** 2
 
         self.pg = self.init_path_generator(motion_gen, n_t=n_t, dt=dt)
-        self.tb = TFBackend(xs, ys, xe, ye, var_s, var_m)
+        self.tb = TFBackend(xs, ys, xe, ye, var_s, var_m, n_t=n_t, n_p=n_p)
         self.pf = self.init_particle_filter(
-            motion_prior=motion_prior, n_p=n_p, dt=dt, n_n=n_n)
+            motion_prior=motion_prior, n_p=n_p, dt=dt, n_n=n_n, n_t=n_t)
 
         self.data = {}
         self.n_pix = n_pix
@@ -90,7 +91,7 @@ class EMGauss(object):
         """
         tmp = (np.arange(l_i) - (l_i - 1) / 2.) * ds
         xs, ys = np.meshgrid(tmp, tmp)
-        xs, ys = [u.astype('float32') for u in [xs, ys]]
+        xs, ys = [u.astype('float32').ravel() for u in [xs, ys]]
         n_pix = xs.size
         return xs, ys, n_pix
 
@@ -150,11 +151,13 @@ class EMGauss(object):
         if pg is None:
             pg = self.pg
         path = pg.gen_path()
+        xr = path[0]
+        yr = path[1]
         m = self.tb.get_m(path[0], path[1], s_gen)
-        return m
+        return m, xr, yr
 
     @staticmethod
-    def init_particle_filter(motion_prior, n_p, dt, n_n):
+    def init_particle_filter(motion_prior, n_p, dt, n_n, n_t):
         """
         Initialize particle filter.
 
@@ -183,9 +186,10 @@ class EMGauss(object):
         tpd = pf.GaussTPD(d_h, d_o, sdev)
         ip = pf.GaussIP(d_h, sdev * 0.001)
         tp = pf.GaussTP(d_h, sdev)
-        lp = GaussObsLP(n_n, d_h)
+        lp = GaussObsLP(d_h, n_n)
+        y = np.zeros((n_t, 1))
         res = pf.ParticleFilter(
-            ipd=ipd, tpd=tpd, ip=ip, tp=tp, lp=lp, Y=None, N_P=n_p)
+            ipd=ipd, tpd=tpd, ip=ip, tp=tp, lp=lp, Y=y, N_P=n_p)
         return res
 
     def reset(self):
@@ -281,15 +285,15 @@ class EMGauss(object):
         n_pix = self.n_pix
         n_t = m.shape[-1]
         a = np.zeros((n_pix, n_pix))
+        a += reg * np.eye(n_pix)
         b = np.zeros((n_pix,))
         s = np.zeros((n_pix,))
 
         data = []
         for _ in range(n_passes):
             self.pf.reset()
-            a[:] = 0
-            a += reg * np.eye(n_pix)
-            b[:] = 0
+            #  a[:] = 0
+            #  b[:] = 0
             for u in range(n_itr):
                 t_0 = n_t * u / n_itr
                 t_f = n_t * (u + 1) / n_itr
@@ -298,7 +302,7 @@ class EMGauss(object):
                 xr0, yr0, w0 = self._run_e(m=m0, t_0=t_0, t_f=t_f, s=s)
                 a, b, s = self._run_m(a=a, b=b, xr=xr0, yr=yr0, w=w0, m=m0)
                 data.append(s.copy())
-        return s
+        return s, data
 
     def _build_param_dict(self):
         pass
@@ -424,15 +428,16 @@ def _calc_m_gen(t_s, t_t, t_var_m, t_eps):
 
     Returns
     -------
-    t_m : tf.Tensor, shape
+    t_m : tf.Tensor, shape (n_sensors, n_p, n_t)
         Measurements
     """
     c = tf.constant(1, dtype='float32', shape=(1,))
-    t_s = np.einsum('i,j,p,t->ijpt', t_s, c, c, c)
-    t_m0 = np.einsum('ijpt, ijpt->jpt', t_s, t_t)
+
+    t_sp = tf.einsum('i,j,p,t->ijpt', t_s, c, c, c)
+    t_m0 = tf.einsum('ijpt,ijpt->jpt', t_sp, t_t)
 
     t_sig_m = t_var_m ** 0.5
-    t_sig_m = np.einsum('j,p,t->jpt', t_sig_m, c, c)
+    t_sig_m = tf.einsum('j,p,t->jpt', t_sig_m, c, c)
 
     t_m = t_m0 + t_sig_m * t_eps
     return t_m
@@ -441,7 +446,7 @@ def _calc_m_gen(t_s, t_t, t_var_m, t_eps):
 class TFBackend(object):
     """Runs core operations on GPU."""
 
-    def __init__(self, xs, ys, xe, ye, var_s, var_m, SMIN=0., SMAX=1.):
+    def __init__(self, xs, ys, xe, ye, var_s, var_m, n_t, n_p, SMIN=0., SMAX=1.):
         """
         Initialize backend that does core computations on GPU.
 
@@ -465,33 +470,44 @@ class TFBackend(object):
             zip([xs, ys, xe, ye, var_s, var_m],
                 ['xs', 'ys', 'xe', 'ye', 'var_s', 'var_m'])]
 
-        t_xr, t_yr = [tf.placeholder('float32', shape=(None, None), name=name)
+        n_pix = xs.size
+        n_sensors = var_m.shape[0]
+
+        #########################
+        # Generate measurements #
+        #########################
+        t_xr_gen, t_yr_gen = [tf.placeholder('float32', shape=(1, n_t), name=name)
+                              for name in ['xr', 'yr']]  # p, t
+
+        # i, j, b, t
+        t_t_gen = _get_t_matrix(t_xs=t_xs, t_ys=t_ys,
+                                t_xe=t_xe, t_ye=t_ye,
+                                t_xr=t_xr_gen, t_yr=t_yr_gen,
+                                t_var=t_var_s)
+
+
+        t_s_gen = tf.placeholder('float32', shape=(n_pix,), name='s_gen')
+
+        # j, p, t
+        t_eps = tf.placeholder('float32', shape=(n_sensors, 1, None),
+                               name='eps')
+        t_m_gen = _calc_m_gen(t_s_gen, t_t_gen, t_var_m, t_eps)
+
+        ################################
+        # Generate inference equations #
+        ################################
+        t_xr, t_yr = [tf.placeholder('float32', shape=(n_p, None), name=name)
                       for name in ['xr', 'yr']]  # p, t
 
         # i, j, b, t
         t_t = _get_t_matrix(t_xs=t_xs, t_ys=t_ys,
                             t_xe=t_xe, t_ye=t_ye,
-                            t_xr=t_xr, t_yr=t_xr,
+                            t_xr=t_xr, t_yr=t_yr,
                             t_var=t_var_s)
 
-        #########################
-        # Generate measurements #
-        #########################
-        n_pix = xs.size
-        t_s_gen = tf.placeholder('float32', shape=(n_pix,), name='s_gen')
 
-        n_sensors = var_m.shape[0]
-        # j, p, t
-        t_eps = tf.placeholder('float32', shape=(n_sensors, None, None),
-                               name='eps')
-        t_m_gen = _calc_m_gen(t_s_gen, t_t, t_var_m, t_eps)
-
-        ################################
-        # Generate inference equations #
-        ################################
-
-        t_w = tf.placeholder('float32', shape=(None, None), name='w')  # p, t
-        t_m = tf.placeholder('float32', shape=(None, None), name='m')  # j, t
+        t_w = tf.placeholder('float32', shape=(n_p, None), name='w')  # p, t
+        t_m = tf.placeholder('float32', shape=(n_sensors, None), name='m')  # j, t
         t_s_inf = tf.placeholder('float32', shape=(n_pix,), name='s_inf')
 
         t_a = _calc_a(t_w, t_t)
@@ -511,12 +527,16 @@ class TFBackend(object):
         self.t_xe = t_xe
         self.t_var_s = t_var_s
         self.t_var_m = t_var_m
-        self.t_xr = t_xr
-        self.t_yr = t_yr
-        self.t_t = t_t
+        self.t_xr_gen = t_xr_gen
+        self.t_yr_gen = t_yr_gen
+        self.t_t_gen = t_t_gen
         self.t_s_gen = t_s_gen
         self.t_eps = t_eps
         self.t_m_gen = t_m_gen
+
+        self.t_xr = t_xr
+        self.t_yr = t_yr
+        self.t_t = t_t
         self.t_w = t_w
         self.t_m = t_m
         self.t_s_inf = t_s_inf
@@ -544,14 +564,19 @@ class TFBackend(object):
         m : array, shape (n_sensors, n_t)
             Measurements
         """
+        n_t = xr.shape[0]
+        n_sensors = self.t_eps.get_shape()[0]
+        noise = np.random.randn(n_sensors, 1, n_t)
+        noise = np.clip(noise, -3, 3)
         feed_dict = {
-            self.t_xr: xr[np.newaxis, :],
-            self.t_yr: yr[np.newaxis, :],
-            self.t_s_gen: s_gen
+            self.t_xr_gen: xr[np.newaxis, :],
+            self.t_yr_gen: yr[np.newaxis, :],
+            self.t_s_gen: s_gen,
+            self.t_eps: noise
         }
         with self.sess.as_default():
             m = self.sess.run(self.t_m_gen, feed_dict=feed_dict)
-        return m[0]
+        return m[:, 0, :]
 
     def get_ab(self, xr, yr, w, m):
         """
@@ -577,9 +602,10 @@ class TFBackend(object):
             self.t_xr: xr,
             self.t_yr: yr,
             self.t_w: w,
-            self.t_m: m}
+            self.t_m: m
+        }
         with self.sess.as_default():
-            a, b = self.sess.run(self.t_a, self.t_b, feed_dict=feed_dict)
+            a, b = self.sess.run([self.t_a, self.t_b], feed_dict=feed_dict)
         return a, b
 
     def get_e(self, xr, yr, m, s):
@@ -636,4 +662,5 @@ class GaussObsLP(LikelihoodPotential):
         m = Yc[:, np.newaxis]
 
         E = self.energy_func(xr, yr, m)[:, 0]
-        return np.exp(-(E - E.mean()))
+        E = E - E.min()
+        return np.exp(-E)
