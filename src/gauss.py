@@ -1,4 +1,4 @@
-"""Impelement Gaussian Model."""
+"""Implement Gaussian Model."""
 
 import numpy as np
 import tensorflow as tf
