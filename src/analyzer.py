@@ -266,14 +266,15 @@ class DataAnalyzer:
         plt.colorbar()
 
     def plot_base_image(self, colorbar=True, alpha=1.,
-                        cmap=plt.cm.gray):
+                        cmap=plt.cm.gray, dx=0., dy=0.):
         """Plot the original image that generates the data."""
         res = _get_sum_gaussian_image(
             self.S_gen.ravel(), self.xs, self.ys,
             self.data['ds'] / np.sqrt(2), n=100)
         a = self.data['ds'] * self.L_I / 2
         plt.imshow(res, cmap=cmap, interpolation='nearest',
-                   extent=[-a, a, -a, a], alpha=alpha)
+                   extent=[-a - dx, a - dx, -a + dy, a + dy],
+                   alpha=alpha)
         if colorbar:
             plt.colorbar()
             plt.title('Stationary Object in the World')
@@ -300,7 +301,7 @@ class DataAnalyzer:
 
         ax = plt.subplot(2, 3, 1)
         #  self.plot_base_image()
-        self.plot_image_and_rfs(ax=ax, legend=False)
+        self.plot_image_and_rfs(ax=ax, legend=False, q=n_time_steps - 1)
         plt.title('Image with Cone RFs and Path')
 
         plt.subplot(2, 3, 5)
@@ -329,7 +330,7 @@ class DataAnalyzer:
         rho = 1 - self.DT / tau
         rav = np.zeros_like(self.R)
 
-        rav[:, 0] = self.R[:, 0]
+        rav[:, 0] = self.R[:, 0] * (1 - rho)
         for i in range(1, self.N_T):
             rav[:, i] = rho * rav[:, i - 1] + (1 - rho) * self.R[:, i]
 
@@ -356,7 +357,7 @@ class DataAnalyzer:
         de = self.data['de']
         ON, OFF = 0, 1
 
-        def normalize(s0, mm=4 * self.data['L1']):
+        def normalize(s0, mm=1.5 * self.data['L1']):
             if s0 < mm:
                 return s0 / (1.0 * mm)
             else:
@@ -368,15 +369,16 @@ class DataAnalyzer:
             if i == OFF and mode == 'ON':
                 continue
             alpha = normalize(s0)
-            ax.add_patch(plt.Circle((x, y), de * 0.203, alpha=alpha))
+            ax.add_patch(plt.Circle((x, -y), de * 0.203, alpha=alpha))
         if moving_average:
             st = 'Spike ExpMA'
         else:
             st = 'Spikes'
-        ax.set_title('{} for {} Cells at time {}'.format(st, mode, t))
+            ax.set_title('{} for {} Cells at t = {:3d}'.format(st, mode, t))
         m = max(max(xe), max(ye))
         ax.set_xlim([-m, m])
         ax.set_ylim([-m, m])
+        ax.set_aspect('equal')
 
     def plot_firing_rates(self, t, mode='ON'):
         """
@@ -470,19 +472,49 @@ class DataAnalyzer:
                 output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
-    def plot_image_and_rfs(self, ax=None, legend=True):
+    def plot_image_and_rfs(self, ax=None, legend=True, q=None):
         """Plot the image with the neuron RF centers."""
         if ax is None:
             ax = plt.axes()
+
+        if q is None:
+            dx, dy = 0., 0.
+            xr, yr = self.xr, self.yr
+
+        else:
+            dx = self.xr[q]
+            dy = self.yr[q]
+            xr, yr = self.xr[0:q], self.yr[0:q]
+
         self.plot_base_image(colorbar=False, alpha=1.,
-                            cmap=plt.cm.gray_r)
-        _plot_rfs_and_path(
+                             cmap=plt.cm.gray_r,
+                             dx=dx, dy=dy)
+
+
+        _plot_rfs(
             ax, self.data['XE'], self.data['YE'], self.data['de'],
-            self.xr, self.yr, legend)
+            legend)
+
+        plt.plot(-xr, yr, label='Eye path', c='g')
+
+        m = max(max(self.data['XE']), max(self.data['YE']))
+        ax.set_xlim([-m, m])
+        ax.set_ylim([-m, m])
+
+
+    def plot_moving_image_and_spikes(self, q):
+        plt.figure(figsize=(12, 4))
+        ax = plt.subplot(1, 3, 1)
+        self.plot_image_and_rfs(ax, q=q, legend=False)
+        ax = plt.subplot(1, 3, 2)
+        self.plot_spikes(ax, q, mode='ON')
+        ax = plt.subplot(1, 3, 3)
+        self.plot_spikes(ax, q, mode='OFF')
 
 
 
-def _plot_rfs_and_path(ax, xe, ye, de, xr, yr, legend):
+
+def _plot_rfs(ax, xe, ye, de, legend):
     """
     Plot the image and the receptive fields.
 
@@ -502,12 +534,10 @@ def _plot_rfs_and_path(ax, xe, ye, de, xr, yr, legend):
             label = 'One SDev of Neuron RF'
         else:
             label = None
-        ax.add_patch(plt.Circle((x, y), r, color='red', fill=True, alpha=0.10,
+        ax.add_patch(plt.Circle((x, -y), r, color='red', fill=True, alpha=0.10,
                                 label=label))
     #  plt.scatter(xe, ye, alpha=0.5, label='Neuron RF Centers, de={}'.format(de))
 
-    if xr is not None and yr is not None:
-        plt.plot(xr, yr, label='Eye path', c='g')
     if legend:
         plt.legend()
         plt.xlabel('x (arcmin)')
