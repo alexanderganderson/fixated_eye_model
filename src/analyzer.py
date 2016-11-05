@@ -89,7 +89,6 @@ class DataAnalyzer:
         self.ys = ys.ravel()
 
         self.N_itr = self.data['N_itr']
-        self.var = self.data['Var'][0]
 
     @classmethod
     def fromfilename(cls, filename):
@@ -142,7 +141,7 @@ class DataAnalyzer:
         i2 = i2 / i2.max()
         return snr(i1, self.xs, self.ys,
                    i2, self.xs + dx, self.ys + dy,
-                   self.var)
+                   var=(self.data['ds'] * 0.5) ** 2)
 
     def snr_list(self):
         """Return a list giving the SNR after each iteration."""
@@ -248,7 +247,7 @@ class DataAnalyzer:
         plt.subplot(2, 2, 4)
         self.plot_velocity_estimate(q, 1)
 
-    def plot_image_estimate(self, q):
+    def plot_image_estimate(self, q, cmap=plt.cm.gray):
         """Plot the estimated image after iteration q."""
         if q == -1:
             q = self.N_itr - 1
@@ -261,7 +260,7 @@ class DataAnalyzer:
                   % self.snr_one_iteration(q))
         # FIXME: extent calculation could break in future
         a = self.data['ds'] * self.L_I / 2
-        plt.imshow(res, cmap=plt.cm.gray, interpolation='nearest',
+        plt.imshow(res, cmap=cmap, interpolation='nearest',
                    extent=[-a, a, -a, a])
         plt.colorbar()
 
@@ -297,7 +296,7 @@ class DataAnalyzer:
         self.plot_spikes(ax, n_time_steps - 1, mode='OFF')
 
         plt.subplot(2, 3, 4)
-        self.plot_image_estimate(q)
+        self.plot_image_estimate(q, cmap=plt.cm.gray_r)
 
         ax = plt.subplot(2, 3, 1)
         #  self.plot_base_image()
@@ -472,7 +471,7 @@ class DataAnalyzer:
                 output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
-    def plot_image_and_rfs(self, ax=None, legend=True, q=None):
+    def plot_image_and_rfs(self, ax=None, legend=True, q=None, alpha_rf=0.5):
         """Plot the image with the neuron RF centers."""
         if ax is None:
             ax = plt.axes()
@@ -493,7 +492,7 @@ class DataAnalyzer:
 
         _plot_rfs(
             ax, self.data['XE'], self.data['YE'], self.data['de'],
-            legend)
+            legend, alpha=alpha_rf)
 
         plt.plot(-xr, yr, label='Eye path', c='g')
 
@@ -514,7 +513,7 @@ class DataAnalyzer:
 
 
 
-def _plot_rfs(ax, xe, ye, de, legend):
+def _plot_rfs(ax, xe, ye, de, legend, alpha=0.5):
     """
     Plot the image and the receptive fields.
 
@@ -534,7 +533,7 @@ def _plot_rfs(ax, xe, ye, de, legend):
             label = 'One SDev of Neuron RF'
         else:
             label = None
-        ax.add_patch(plt.Circle((x, -y), r, color='red', fill=True, alpha=0.10,
+        ax.add_patch(plt.Circle((x, -y), r, color='red', fill=True, alpha=alpha,
                                 label=label))
     #  plt.scatter(xe, ye, alpha=0.5, label='Neuron RF Centers, de={}'.format(de))
 
