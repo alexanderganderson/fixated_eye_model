@@ -488,7 +488,8 @@ class ParticleFilter:
                             axis=1)
         self.sdevs = np.sqrt(np.sum(self.XS ** 2 *
                                     self.WS.reshape(self.N_T, self.N_P, 1),
-                                    axis=1) - self.means ** 2)
+                                    axis=1) - self.means ** 2 +
+                            0.00001)
 
     def plot(self, X, DT, show=True):
         """

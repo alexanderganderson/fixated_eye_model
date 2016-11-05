@@ -23,6 +23,7 @@ class EMGauss(object):
                  print_mode,
                  l_n,
                  sig_obs,
+                 rf_ratio=0.203,
                  dt=0.001,
                  neuron_layout='hex'):
 
@@ -31,7 +32,7 @@ class EMGauss(object):
 
         # FIMXE: make i,j tensor
         var_s = np.ones((1,), dtype='float32') * (
-            (0.5 * ds) ** 2 + (0.203 * de) ** 2)
+            (0.5 * ds) ** 2 + (rf_ratio * de) ** 2)
         var_m = np.ones((n_n,), dtype='float32') * sig_obs ** 2
 
         self.pg = self.init_path_generator(motion_gen, n_t=n_t, dt=dt)

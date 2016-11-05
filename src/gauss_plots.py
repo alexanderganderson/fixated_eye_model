@@ -58,7 +58,7 @@ def plot_image(s, ds, colorbar=False, alpha=1.,
         plt.colorbar()
 
 
-def plot_rfs(ax, xe, ye, de, legend=False):
+def plot_rfs(ax, xe, ye, de, legend=False, alpha=0.1):
     """
     Plot the image and the receptive fields.
 
@@ -82,7 +82,8 @@ def plot_rfs(ax, xe, ye, de, legend=False):
             label = 'One SDev of Neuron RF'
         else:
             label = None
-        ax.add_patch(plt.Circle((x, y), r, color='green', fill=True, alpha=0.10,
+        ax.add_patch(plt.Circle((x, y), r, color='green', fill=True,
+                                alpha=alpha,
                                 label=label))
     if legend:
         plt.legend()
@@ -153,7 +154,8 @@ def compare_fourier(s_gen, s_inf, l_i, ds, de,
 
         ax = plt.subplot(n_row, n_col, i * n_col + 3)
         if i == 0:
-            plot_rfs(ax, xe, ye, de)
-            plot_image(s_gen, ds=ds,
-                       title='Image: {}'.format('Image with RFs'),
-                       alpha=0.75)
+            plot_rfs(ax, xe, ye, de, alpha=0.5)
+            plot_image(
+                s_gen, ds=ds,
+                title='Image: {}'.format('Image with RFs')
+            )
