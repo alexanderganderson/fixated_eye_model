@@ -152,7 +152,7 @@ class DataAnalyzer:
         return (self.N_T * (np.arange(self.N_itr) + 1) /
                 self.N_itr * 1000 * self.DT)
 
-    def plot_path_estimate(self, q, d):
+    def plot_path_estimate(self, ax, q, d, title=True):
         """
         Plot the actual and estimated path generated.
 
@@ -168,28 +168,30 @@ class DataAnalyzer:
 
         if (d == 0):
             path = self.xr
-            label = 'Hor.'
+            label = 'X'
             dxy = self.dx
         elif (d == 1):
             path = self.yr
-            label = 'Ver.'
+            label = 'Y'
             dxy = self.dy
         else:
             raise ValueError('d must be either 0 or 1')
 
         # t = self.data['EM_data'][q]['time_steps']
 
-        plt.fill_between(self.DT * np.arange(self.N_T),
-                         est_mean[:, d] - est_sdev[:, d],
-                         est_mean[:, d] + est_sdev[:, d],
-                         alpha=0.5, linewidth=1.)
-        plt.plot(self.DT * np.arange(self.N_T),
+        ax.fill_between(self.DT * np.arange(self.N_T),
+                        est_mean[:, d] - est_sdev[:, d],
+                        est_mean[:, d] + est_sdev[:, d],
+                        alpha=0.5, linewidth=0.25)
+        ax.plot(self.DT * np.arange(self.N_T),
                  est_mean[:, d], label='estimate')
-        plt.plot(self.DT * np.arange(self.N_T),
+        ax.plot(self.DT * np.arange(self.N_T),
                  path, label='actual')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Relative position (arcmin)')
-        plt.title(label + ' Pos., shift = %.2f' % dxy)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Relative position (arcmin)')
+        if title:
+            #  ax.set_title(label + ' Pos., shift = %.2f' % dxy)
+            ax.set_title('{} Position'.format(label))
 
     def plot_velocity_estimate(self, q, d):
         """
@@ -236,10 +238,10 @@ class DataAnalyzer:
             raise RuntimeError('Run has no velocity estimate')
 
         plt.subplot(2, 2, 1)
-        self.plot_path_estimate(q, 0)
+        self.plot_path_estimate(q, 0, title=False)
 
         plt.subplot(2, 2, 2)
-        self.plot_path_estimate(q, 1)
+        self.plot_path_estimate(q, 1, title=False)
 
         plt.subplot(2, 2, 3)
         self.plot_velocity_estimate(q, 0)
@@ -247,7 +249,8 @@ class DataAnalyzer:
         plt.subplot(2, 2, 4)
         self.plot_velocity_estimate(q, 1)
 
-    def plot_image_estimate(self, q, cmap=plt.cm.gray):
+    def plot_image_estimate(self, fig, ax, q, cmap=plt.cm.gray,
+                            colorbar=True):
         """Plot the estimated image after iteration q."""
         if q == -1:
             q = self.N_itr - 1
@@ -256,29 +259,30 @@ class DataAnalyzer:
             self.data['EM_data'][q]['image_est'].ravel(),
             self.xs, self.ys,
             self.data['ds'] / np.sqrt(2), n=100)
-        plt.title('Estimated Image, S = DA:\n SNR = %.2f'
+        ax.set_title('Estimated Image, S = DA:\n SNR = %.2f'
                   % self.snr_one_iteration(q))
         # FIXME: extent calculation could break in future
         a = self.data['ds'] * self.L_I / 2
-        plt.imshow(res, cmap=cmap, interpolation='nearest',
-                   extent=[-a, a, -a, a])
-        plt.colorbar()
+        cax = ax.imshow(res, cmap=cmap, interpolation='nearest',
+                        extent=[-a, a, -a, a])
+        if colorbar:
+            fig.colorbar(cax, ax=ax)
 
-    def plot_base_image(self, colorbar=True, alpha=1.,
+    def plot_base_image(self, fig, ax, colorbar=True, alpha=1.,
                         cmap=plt.cm.gray, dx=0., dy=0.):
         """Plot the original image that generates the data."""
         res = _get_sum_gaussian_image(
             self.S_gen.ravel(), self.xs, self.ys,
             self.data['ds'] / np.sqrt(2), n=100)
         a = self.data['ds'] * self.L_I / 2
-        plt.imshow(res, cmap=cmap, interpolation='nearest',
-                   extent=[-a - dx, a - dx, -a + dy, a + dy],
-                   alpha=alpha)
+        cax = ax.imshow(res, cmap=cmap, interpolation='nearest',
+                        extent=[-a - dx, a - dx, -a + dy, a + dy],
+                        alpha=alpha)
         if colorbar:
-            plt.colorbar()
-            plt.title('Stationary Object in the World')
+            fig.colorbar(cax, ax=ax)
+            ax.set_title('Stationary Object in the World')
 
-    def plot_em_estimate(self, q):
+    def plot_em_estimate(self, q, figsize=None):
         """Visualize the results after iteration q."""
         if q == -1:
             q = self.N_itr - 1
@@ -286,31 +290,44 @@ class DataAnalyzer:
         n_time_steps = self.data['EM_data'][q]['time_steps']
         t_ms = self.DT * n_time_steps * 1000.
 
-        fig = plt.figure(figsize=(12, 8))
-        fig.suptitle('EM Reconstruction after t = {} ms'.format(t_ms))
+        if figsize is None:
+            figsize=(3.5, 5)
+        fig, ax = plt.subplots(nrows=3, ncols=2, figsize=figsize)
+        #  fig.suptitle('EM Reconstruction after t = {} ms'.format(t_ms))
 
-        ax = plt.subplot(2, 3, 2)
-        self.plot_spikes(ax, n_time_steps - 1, mode='ON')
+        self.plot_spikes(ax[1][0], n_time_steps - 1, mode='ON')
 
-        ax = plt.subplot(2, 3, 3)
-        self.plot_spikes(ax, n_time_steps - 1, mode='OFF')
+        self.plot_spikes(ax[1][1], n_time_steps - 1, mode='OFF')
 
-        plt.subplot(2, 3, 4)
-        self.plot_image_estimate(q, cmap=plt.cm.gray_r)
+        self.plot_image_estimate(fig, ax[0][1], q, cmap=plt.cm.gray_r)
 
-        ax = plt.subplot(2, 3, 1)
-        #  self.plot_base_image()
-        self.plot_image_and_rfs(ax=ax, legend=False, q=n_time_steps - 1)
-        plt.title('Image with Cone RFs and Path')
+        self.plot_image_and_rfs(fig, ax=ax[0][0], legend=False, q=n_time_steps - 1)
+        ax[0][0].set_title('Pattern with Cone RFs')
 
-        plt.subplot(2, 3, 5)
-        self.plot_path_estimate(q, 0)
+        self.plot_path_estimate(ax[2][0], q, 0)
 
-        plt.subplot(2, 3, 6)
-        self.plot_path_estimate(q, 1)
+        self.plot_path_estimate(ax[2][1], q, 1)
+
+        for u in [0, 1]:
+            ax_ = ax[2][u]
+            start, stop = ax_.get_xlim()
+            ticks = np.arange(start, stop + 0.1, (stop - start) / 2)
+            ax_.set_xticks(ticks)
+
+        u0, v0 = ax[2][0].get_ylim()
+        u1, v1 = ax[2][1].get_ylim()
+
+        for u in [0, 1]:
+            ax[2][u].set_ylim(min(u0, u1), max(v0, v1))
+
+
+
+
 
         plt.tight_layout()
-        plt.subplots_adjust(top=0.9)
+        #  plt.subplots_adjust(top=0.9)
+
+        return fig, ax
 
     def save_images(self):
         """Save images for all iterations."""
@@ -370,10 +387,10 @@ class DataAnalyzer:
             alpha = normalize(s0)
             ax.add_patch(plt.Circle((x, -y), de * 0.203, alpha=alpha))
         if moving_average:
-            st = 'Spike ExpMA'
+            st = 'ExpMA'
         else:
             st = 'Spikes'
-            ax.set_title('{} for {} Cells at t = {:3d}'.format(st, mode, t))
+        ax.set_title('{} for {} Cells'.format(st, mode))
         m = max(max(xe), max(ye))
         ax.set_xlim([-m, m])
         ax.set_ylim([-m, m])
@@ -443,7 +460,7 @@ class DataAnalyzer:
 
     def plot_tuning_curves(self, baseline_rate=10.):
         """Create a plot showing the tuning curves of the neurons."""
-        x = np.arange(0, 1, 0.01)
+        x = np.arange(0, 1 + 0.01, 0.01)
         l0 = self.data['L0']
         l1 = self.data['L1']
         y_on = np.exp(np.log(l0) + x * np.log(l1 / l0))
@@ -453,7 +470,7 @@ class DataAnalyzer:
         plt.plot(x, baseline_rate + 0 * x, '--')
         plt.xlabel('Stimulus intensity')
         plt.ylabel('Firing Rate (Hz)')
-        plt.title('Firing rate as a function \n of Stimulus Intensity')
+        #  plt.title('Firing rate as a function \n of Stimulus Intensity')
         plt.legend()
 
     def save_em_jpgs(self, output_dir, tag):
@@ -471,10 +488,10 @@ class DataAnalyzer:
                 output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
-    def plot_image_and_rfs(self, ax=None, legend=True, q=None, alpha_rf=0.5):
+    def plot_image_and_rfs(self, fig=None, ax=None, legend=True, q=None, alpha_rf=0.5):
         """Plot the image with the neuron RF centers."""
-        if ax is None:
-            ax = plt.axes()
+        if fig is None:
+            fig, ax = plt.subplots(1, 1)
 
         if q is None:
             dx, dy = 0., 0.
@@ -485,7 +502,7 @@ class DataAnalyzer:
             dy = self.yr[q]
             xr, yr = self.xr[0:q], self.yr[0:q]
 
-        self.plot_base_image(colorbar=False, alpha=1.,
+        self.plot_base_image(fig, ax, colorbar=False, alpha=1.,
                              cmap=plt.cm.gray_r,
                              dx=dx, dy=dy)
 
@@ -494,7 +511,7 @@ class DataAnalyzer:
             ax, self.data['XE'], self.data['YE'], self.data['de'],
             legend, alpha=alpha_rf)
 
-        plt.plot(-xr, yr, label='Eye path', c='g')
+        ax.plot(-xr, yr, label='Eye path', c='g')
 
         m = max(max(self.data['XE']), max(self.data['YE']))
         ax.set_xlim([-m, m])
@@ -530,7 +547,7 @@ def _plot_rfs(ax, xe, ye, de, legend, alpha=0.5):
     r = 0.203 * de
     for i, (x, y) in enumerate(zip(xe, ye)):
         if i == 0:
-            label = 'One SDev of Neuron RF'
+            label = None  # 'One SDev of Neuron RF'
         else:
             label = None
         ax.add_patch(plt.Circle((x, -y), r, color='red', fill=True, alpha=alpha,
