@@ -250,7 +250,7 @@ class DataAnalyzer:
         self.plot_velocity_estimate(q, 1)
 
     def plot_image_estimate(self, fig, ax, q, cmap=plt.cm.gray,
-                            colorbar=True):
+                            colorbar=True, vmax=None):
         """Plot the estimated image after iteration q."""
         if q == -1:
             q = self.N_itr - 1
@@ -264,7 +264,8 @@ class DataAnalyzer:
         # FIXME: extent calculation could break in future
         a = self.data['ds'] * self.L_I / 2
         cax = ax.imshow(res, cmap=cmap, interpolation='nearest',
-                        extent=[-a, a, -a, a])
+                        extent=[-a, a, -a, a],
+                        vmax=vmax)
         if colorbar:
             fig.colorbar(cax, ax=ax)
 
@@ -556,8 +557,8 @@ def _plot_rfs(ax, xe, ye, de, legend, alpha=0.5):
 
     if legend:
         plt.legend()
-        plt.xlabel('x (arcmin)')
-        plt.ylabel('y (arcmin)')
+        ax.set_xlabel('x (arcmin)')
+        ax.set_ylabel('y (arcmin)')
 
 def _get_sum_gaussian_image(s_gen, xs, ys, sdev, n=50):
     """
@@ -607,7 +608,7 @@ def pf_plot(pf, t):
     plt.scatter(xx, yy, s=ww * 5000)
 
 
-def plot_fill_between(t, data, label='', c=None, k=1.):
+def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.):
     """
     Create a plot of the data +/- k standard deviations.
 
@@ -622,8 +623,9 @@ def plot_fill_between(t, data, label='', c=None, k=1.):
     """
     mm = data.mean(0)
     sd = data.std(0) * k
-    plt.fill_between(t, mm - sd, mm + sd, alpha=0.5, color=c)
-    plt.plot(t, mm, color=c, label=label)
+    ax.fill_between(t, mm - sd, mm + sd, alpha=0.5, color=c,
+                    hatch=hatch, label=label)
+    ax.plot(t, mm, color=c)
 
 
 if __name__ == '__main__':
