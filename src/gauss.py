@@ -282,6 +282,8 @@ class EMGauss(object):
         -------
         s : array, shape (n_pix,)
             Final estimate of the image.
+        data : list of array, shape (n_pix,)
+            List of estimated image at each step
         """
         n_pix = self.n_pix
         n_t = m.shape[-1]
@@ -407,9 +409,11 @@ def _calc_batched_e(t_m, t_s, t_t, t_var_m):
     """
     c = tf.constant(1, dtype='float32', shape=(1,))
     t_s = tf.einsum('i,j,p,t->ijpt', t_s, c, c, c)
-    t_m0 = tf.einsum('ijpt,ijpt->jpt', t_s, t_t)
+    #  t_m0 = tf.einsum('ijpt,ijpt->jpt', t_s, t_t)
+    t_m0 = tf.reduce_sum(t_s * t_t, axis=0)
     t_m = tf.einsum('p,jt->jpt', c, t_m)
-    t_e = tf.einsum('jpt,j->pt', (t_m - t_m0) ** 2, 1./(2 * t_var_m))
+    #  t_e = tf.einsum('jpt,j->pt', (t_m - t_m0) ** 2, 1./(2 * t_var_m))
+    t_e = tf.reduce_sum((t_m - t_m0) ** 2 * 1./(2 * t_var_m), axis=0)
     return t_e
 
 
@@ -435,7 +439,9 @@ def _calc_m_gen(t_s, t_t, t_var_m, t_eps):
     c = tf.constant(1, dtype='float32', shape=(1,))
 
     t_sp = tf.einsum('i,j,p,t->ijpt', t_s, c, c, c)
-    t_m0 = tf.einsum('ijpt,ijpt->jpt', t_sp, t_t)
+    #  import pdb; pdb.set_trace()
+    #  t_m0 = tf.einsum('ijpt,ijpt->jpt', t_sp, t_t)
+    t_m0 = tf.reduce_sum(t_sp * t_t, axis=0)
 
     t_sig_m = t_var_m ** 0.5
     t_sig_m = tf.einsum('j,p,t->jpt', t_sig_m, c, c)
@@ -518,7 +524,7 @@ class TFBackend(object):
         t_e = _calc_batched_e(t_m, t_s_inf, t_t, t_var_m)
 
         # Initialize variables
-        init_op = tf.initialize_all_variables()
+        init_op = tf.global_variables_initializer()
         self.sess = tf.Session()
         with self.sess.as_default():
             self.sess.run(init_op)

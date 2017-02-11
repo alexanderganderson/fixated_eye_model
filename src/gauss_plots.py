@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from src.analyzer import snr
+
 from scipy.signal import gaussian, convolve2d
 
 def smooth_image(s):
@@ -58,7 +60,7 @@ def plot_image(s, ds, colorbar=False, alpha=1.,
         plt.colorbar()
 
 
-def plot_rfs(ax, xe, ye, de, legend=False, alpha=0.1):
+def plot_rfs(ax, xe, ye, de, rf_ratio, legend=False, alpha=0.1):
     """
     Plot the image and the receptive fields.
 
@@ -76,7 +78,7 @@ def plot_rfs(ax, xe, ye, de, legend=False, alpha=0.1):
     #  ax = plt.axes()
     ax.set_aspect('equal')
     # FIXME: HARD CODED 2x
-    r = 0.203 * de
+    r = rf_ratio * de
     for i, (x, y) in enumerate(zip(xe, ye)):
         if i == 0:
             label = 'One SDev of Neuron RF'
@@ -123,7 +125,7 @@ def plot_fourier_spectrum(ax, s, ds, de):
 
 
 def compare_fourier(s_gen, s_inf, l_i, ds, de,
-                    xe, ye):
+                    xe, ye, rf_ratio):
     """
     Plot the two fourier spectrums.
 
@@ -141,7 +143,8 @@ def compare_fourier(s_gen, s_inf, l_i, ds, de,
         X, Y positions of sensors.
     """
     n_row, n_col = 2, 3
-    plt.figure(figsize=(n_col * 6, n_row * 4.5))
+    fig, axes = plt.subplots(nrows=n_row, ncols=n_col,
+                           figsize=(n_col * 6, n_row * 4.5))
     vmin, vmax = s_gen.min(), s_gen.max()
 
     for i, (s, name) in enumerate(zip([s_gen, s_inf], ['Original', 'Estimate'])):
@@ -154,8 +157,88 @@ def compare_fourier(s_gen, s_inf, l_i, ds, de,
 
         ax = plt.subplot(n_row, n_col, i * n_col + 3)
         if i == 0:
-            plot_rfs(ax, xe, ye, de, alpha=0.5)
+            plot_rfs(ax, xe, ye, de, rf_ratio, alpha=0.5)
             plot_image(
                 s_gen, ds=ds,
                 title='Image: {}'.format('Image with RFs')
             )
+
+def plot_path_estimate(est_mean, est_sdev, xyr, d, q, dt=0.001):
+    """
+    Plot the actual and estimated path generated.
+
+    Parameters
+    ----------
+    q : int
+        EM iteration number
+    d : int
+        Dimension to plot (either 0 or 1)
+    """
+    n_t = est_mean.shape[0]
+    path = xyr[d]
+    if (d == 0):
+        label = 'Hor.'
+    elif (d == 1):
+        label = 'Ver.'
+    else:
+        raise ValueError('d must be either 0 or 1')
+
+    tt = dt * np.arange(n_t)
+    plt.fill_between(tt,
+                     est_mean[:, d] - est_sdev[:, d],
+                     est_mean[:, d] + est_sdev[:, d],
+                     alpha=0.5, linewidth=1.)
+    plt.plot(tt,
+             est_mean[:, d], label='estimate')
+    plt.plot(tt,
+             path, label='actual')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Relative position (arcmin)')
+    plt.title('{} Position'.format(label))
+
+
+
+def snr_one_iteration(s_gen, s_est, xyr, xyr_est, xs, ys, t, var):
+    """
+    Get the SNR between the two images, correcting for a shift.
+
+    Parameters
+    ----------
+    s_gen : array, shape (l_i, l_i)
+        True image.
+    s_est : array, shape (l_i, l_i)
+        Estimated image.
+    xyr :
+    xyr_est :
+    xs :
+    ys :
+    t :
+    var :
+
+    Returns
+    -------
+
+    """
+    xr, yr = xyr
+    xr_est = xyr_est[:, 0]
+    yr_est = xyr_est[:, 1]
+    t += 1
+    dx = np.mean(xr[0:t] - xr_est[0:t])
+    dy = np.mean(yr[0:t] - yr_est[0:t])
+    i1 = s_gen.ravel()
+    i2 = s_est.ravel()
+    return snr(i1, xs, ys,
+               i2, xs + dx, ys + dy,
+               var)
+
+def get_snr_list(s_gen, estimates, xyr, xyr_est, xs, ys, ds):
+    var = (0.5 * ds) ** 2
+    return [snr_one_iteration(s_gen, s_est, xyr, xyr_est, xs, ys, q, var=var)
+            for q, s_est in enumerate(estimates)]
+
+
+
+
+
+
+
