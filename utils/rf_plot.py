@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
-                colorbar=True):
+                colorbar=True, fig=None, ax=None):
     """
     Plot a collection of images.
 
@@ -18,6 +18,8 @@ def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
     m : int
         Plot a m by m grid of receptive fields
     """
+    if fig is None or ax is None:
+        fig, ax = plt.subplots(1, 1)
     n, n_pix = d.shape
     if m is None:
         m = int(np.sqrt(n - 0.01)) + 1
@@ -39,7 +41,8 @@ def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
     else:
         m0 = -mm
     m1 = mm
-    plt.imshow(out, cmap=cmap, interpolation='nearest', vmin=m0, vmax=m1)
+    cax = ax.imshow(out, cmap=cmap, interpolation='nearest', vmin=m0, vmax=m1)
     if colorbar:
-        plt.colorbar()
+        fig.colorbar(cax)
+
     plt.axis('off')

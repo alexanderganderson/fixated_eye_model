@@ -109,7 +109,7 @@ class EMBurak(object):
 
         d = d.astype('float32')
 
-        s_gen = s_gen.astype('float32')
+        #  s_gen = s_gen.astype('float32')
         # Assumes that the first dimension is 'Y'
         #    and the second dimension is 'X'
         self.s_gen_name = s_gen_name
@@ -210,6 +210,7 @@ class EMBurak(object):
         xr = path[0][np.newaxis, :].astype('float32')
         yr = path[1][np.newaxis, :].astype('float32')
 
+        s_gen = s_gen.astype('float32')
         self.calculate_inner_products(s_gen, xr, yr)
 
         r = self.tc.spikes(s_gen, xr, yr)[0]
