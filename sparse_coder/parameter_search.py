@@ -22,8 +22,9 @@ args = parser.parse_args()
 data = get_data_matrix(l_patch=args.l_patch)
 d_eff = get_effective_dimensionality(data)
 
-alpha_ = [0.1, 0.15, 0.2]
-over_comp_ = [1., 2., 3.]
+#  alpha_ = [0.1, 0.15, 0.2]
+alpha_ = [0.05, 0.075]
+over_comp_ = [2., 3.]
 
 for alpha, over_comp in product(alpha_, over_comp_):
     n_sp = int(over_comp * d_eff)
@@ -38,7 +39,7 @@ for alpha, over_comp in product(alpha_, over_comp_):
 
     path = os.path.join(
         args.output_dir,
-        'sparse_coder_alpha_{:.2f}_overcomp_{:0.2f}.pkl'.format(
-            alpha, over_comp))
+        'sparse_coder_alpha_{:.2f}_overcomp_{:0.2f}_l_patch_{}.pkl'.format(
+            alpha, over_comp, args.l_patch))
     print 'Saving to {}'.format(path)
     sc.save(path)

@@ -37,6 +37,31 @@ def get_effective_dimensionality(data, var_thresh=0.9):
     return d_eff
 
 
+def get_pca_basis(data, var_thresh=0.9):
+    """
+    Get the effective dimensionality of a dataset using PCA.
+
+    Parameters
+    ----------
+    data : array, shape (n_images, n_features)
+        Data to be analyzed.
+    var_thresh : float
+        Percent of total variance to cut the dimensionality.
+
+    Returns
+    -------
+    d: array, shape (d_eff, n_features)
+        Basis that captures 90 percent of the variance in the data
+    """
+    IM_cov = np.cov(data.T)
+    evals, evecs = eigh(IM_cov)
+    cs = np.cumsum(evals[::-1])
+    d_eff = np.argmax(cs > cs[-1] * var_thresh) # Effective Dim of data
+    return evecs.T[::-1][0:d_eff]
+
+
+
+
 class SparseCoder(object):
     """
     Create a sparse code on a set of data.
@@ -120,7 +145,7 @@ class SparseCoder(object):
             costs = self._run_train_step(i_idx=i_idx, eta=eta, n_g_itr=n_g_itr)
             E, E_rec, E_sp, SNR = costs
             cost_list.append(E)
-            show_costs_now = ((i + 1) % (1 + n_itr / 10) == 0) and show_costs
+            show_costs_now = ((i + 1) % (1 + n_itr / 1000) == 0) and show_costs
             if show_costs_now:
                 print i, E, E_rec, E_sp, SNR
         return i_idx
