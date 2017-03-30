@@ -1,5 +1,7 @@
 """Sparse Coding Class."""
 
+from itertools import product
+
 import numpy as np
 from scipy.linalg import eigh
 import cPickle as pkl
@@ -60,14 +62,34 @@ def get_pca_basis(data, var_thresh=0.9):
     return evecs.T[::-1][0:d_eff]
 
 
+def _build_base_masks(l_img):
+    itr = product([0, l_img/4, l_img/2],
+                  [0, l_img/4, l_img/2])
+    itr = [i for i in itr]
+    masks = np.zeros((3 + len(itr), l_img, l_img))
+    for i, (u, v) in enumerate(itr):
+        masks[i,
+              u:u + l_img / 2,
+              v:v + l_img / 2] = 1
+        masks[-3:] = 1
+    return masks
 
+def sparsifying_mask(l_img, n_sp):
+    base_masks = _build_base_masks(l_img)
+    k, _, _  = base_masks.shape
+    repl = int(n_sp / k)
+    masks = np.ones((n_sp, l_img, l_img))
+    for i, base_mask in enumerate(base_masks):
+        masks[i * repl:(i+1) * repl] = base_mask
+    return masks
 
 class SparseCoder(object):
     """
     Create a sparse code on a set of data.
     """
 
-    def __init__(self, data, n_sp, n_bat, alpha, d_scale=1., pos_only=False):
+    def __init__(self, data, n_sp, n_bat, alpha, d_scale=1., pos_only=False,
+                 sparsify=False):
         """
 
         Parameters
@@ -82,13 +104,18 @@ class SparseCoder(object):
             Sparsity coefficient
         pos_only : bool
             True if we do positive only learning
+        sparsify: bool
+            If True, generate a mask to sparsify the dictionary during
+            learning.
         """
 
         self.n_imgs = data.shape[0]
         self.n_bat = n_bat
         self.d_scale = d_scale
+        self.sparsify = sparsify
         self.tc = TheanoBackend(data=data, alpha=alpha, d_scale=d_scale,
-                                pos_only=pos_only, n_bat=n_bat, n_sp=n_sp)
+                                pos_only=pos_only, n_bat=n_bat, n_sp=n_sp,
+                                sparsify=sparsify)
 
     def save(self, path):
         """
@@ -100,7 +127,8 @@ class SparseCoder(object):
         """
         d = {'n_sp': self.tc.n_sp, 'n_bat': self.n_bat, 'alpha': self.tc.alpha,
              'd_scale': self.d_scale,
-             'pos_only': self.tc.pos_only, 'D': self.tc.t_D.get_value()}
+             'pos_only': self.tc.pos_only, 'D': self.tc.t_D.get_value(),
+             'sparsify': self.sparsify}
         with open(path, 'wb') as fn:
             pkl.dump(d, fn)
 
@@ -111,7 +139,7 @@ class SparseCoder(object):
 
         sparse_coder = cls(
             data, n_sp=d['n_sp'], n_bat=d['n_bat'], alpha=d['alpha'],
-            d_scale=d['d_scale'], pos_only=d['pos_only'])
+            d_scale=d['d_scale'], pos_only=d['pos_only'], sparsify=d['sparsify'])
 
         sparse_coder.tc.t_D.set_value(d['D'])
         return sparse_coder
@@ -145,7 +173,7 @@ class SparseCoder(object):
             costs = self._run_train_step(i_idx=i_idx, eta=eta, n_g_itr=n_g_itr)
             E, E_rec, E_sp, SNR = costs
             cost_list.append(E)
-            show_costs_now = ((i + 1) % (1 + n_itr / 1000) == 0) and show_costs
+            show_costs_now = ((i + 1) % (1 + n_itr / 100) == 0) and show_costs
             if show_costs_now:
                 print i, E, E_rec, E_sp, SNR
         return i_idx
@@ -160,8 +188,9 @@ class SparseCoder(object):
 
         """
         self.tc.reset_fista_variables()
+        l = self.tc.calculate_fista_l(self.tc.t_D.get_value())
         for i in range(n_g_itr):
-            E, E_rec, E_sp, SNR = self.tc.fista_step(i_idx)
+            E, E_rec, E_sp, SNR = self.tc.fista_step(i_idx, l)
             if show_costs:
                 print i, E, E_rec, E_sp, SNR
         E, E_rec, E_sp, SNR = self.tc.costs(i_idx)
@@ -221,7 +250,7 @@ class SparseCoder(object):
 class TheanoBackend(object):
     """
     """
-    def __init__(self, data, alpha, d_scale, pos_only, n_bat, n_sp):
+    def __init__(self, data, alpha, d_scale, pos_only, n_bat, n_sp, sparsify):
         """
 
         Parameters
@@ -267,6 +296,7 @@ class TheanoBackend(object):
         D = d_scale * D / np.sqrt(np.sum(D ** 2, axis=1, keepdims=True)) # Normalize dictionary elements
         t_D = theano.shared(D.astype('float32'), 'D')
 
+
         t_DATA = theano.shared(data, 'I')
         t_A = theano.shared(np.zeros((n_bat, n_sp), dtype='float32'), 'A')
         t_Alpha = theano.shared(np.array(alpha, dtype='float32'), 'Alpha')  # Sparsity weight
@@ -287,10 +317,18 @@ class TheanoBackend(object):
 
         t_gED = T.grad(t_E_rec, t_D)
 
+        if sparsify is True:
+            d_mask = sparsifying_mask(l_img=int(np.sqrt(n_pix)), n_sp=n_sp)
+            d_mask = d_mask.reshape(d_mask.shape[0], -1)
+            t_D_mask = theano.shared(d_mask.astype('float32'), 'd_mask')
+            t_D_update = row_norm(t_D_mask * threshold(t_D - t_Eta * row_norm(t_gED)))
+        else:
+            t_D_update = row_norm(threshold(t_D - t_Eta * row_norm(t_gED)))
+
         dictionary_learning_step = theano.function(
             inputs = [t_Eta, t_D_scale, t_I_idx],
             outputs = [t_E, t_E_rec, t_E_sp],
-            updates = [(t_D, row_norm(threshold(t_D - t_Eta * row_norm(t_gED))))])
+            updates = [(t_D, t_D_update)])
 
 
         fist_updates = fista_updates(t_A, t_E_rec, t_Alpha, t_L, pos_only=pos_only)
@@ -322,8 +360,7 @@ class TheanoBackend(object):
         """
         self._dictionary_learning_step(eta, d_scale, i_idx)
 
-    def fista_step(self, i_idx):
-        l = self.calculate_fista_l(self.t_D.get_value())
+    def fista_step(self, i_idx, l):
         return self._fista_step(l, i_idx)
 
     def costs(self, i_idx):
