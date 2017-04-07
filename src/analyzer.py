@@ -270,7 +270,7 @@ class DataAnalyzer:
             fig.colorbar(cax, ax=ax)
 
     def plot_base_image(self, fig, ax, colorbar=True, alpha=1.,
-                        cmap=plt.cm.gray, dx=0., dy=0.):
+                        cmap=plt.cm.gray_r, dx=0., dy=0.):
         """Plot the original image that generates the data."""
         res = _get_sum_gaussian_image(
             self.S_gen.ravel(), self.xs, self.ys,
@@ -624,8 +624,8 @@ def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.):
     mm = data.mean(0)
     sd = data.std(0) * k
     ax.fill_between(t, mm - sd, mm + sd, alpha=0.5, color=c,
-                    hatch=hatch, label=label)
-    ax.plot(t, mm, color=c)
+                    hatch=hatch)
+    ax.plot(t, mm, color=c, label=label)
 
 
 if __name__ == '__main__':

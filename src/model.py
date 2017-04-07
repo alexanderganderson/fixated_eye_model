@@ -698,20 +698,20 @@ class EMBurak(object):
         return self.tc.image_costs(xr, yr, r, w, s)
 
 
-# from utils.gradient_checker import hessian_check
+#  from utils.gradient_checker import hessian_check
 
-# def f(A):
+#  def f(A):
 #     emb.tc.t_A.set_value(A.astype('float32'))
 #     return emb.get_spike_cost()
 
 
-# def fpp(A):
+#  def fpp(A):
 #     emb.tc.t_A.set_value(A.astype('float32'))
 #     return emb.get_hessian()
 
-# x0 = emb.tc.get_A()
+#  x0 = emb.tc.get_A()
 
-# for _ in range(2):
+#  for _ in range(2):
 #     u, v = hessian_check(f, fpp, (D.shape[0],), x0=x0)
 #     print u, v
 

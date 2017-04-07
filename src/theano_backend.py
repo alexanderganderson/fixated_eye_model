@@ -139,6 +139,7 @@ class TheanoBackend(object):
         """
         self.l_i = XS.shape[0]
         self.n_l = d.shape[0]
+        self.n_n = XE.shape[0]
 
         # Define Theano Variables Common to Generation and Inference
         self.t_XS = theano.shared(XS, 'XS')
@@ -236,9 +237,32 @@ class TheanoBackend(object):
         # b, i2, i1, j, t -> b, _, i2, i1, j, t
         # k, i2, i1 -> _, k, i2, i1, _, _
         # b, k, j, t
-        t_SpRFCoupling = (
-            t_PixRFCoupling.dimshuffle(0, 'x', 1, 2, 3, 4) *
-            t_Dp.dimshuffle('x', 0, 1, 2, 'x', 'x')).sum(axis=(2, 3))
+
+        #  t_SpRFCoupling = (
+        #      t_PixRFCoupling.dimshuffle(0, 'x', 1, 2, 3, 4) *
+        #      t_Dp.dimshuffle('x', 0, 1, 2, 'x', 'x')).sum(axis=(2, 3))
+
+        def pix_rf_to_sp_rf(t_PixRFCoupling, t_Dp):
+            """
+            b i2 i1 j t
+            k i2 i1
+            b k j t
+            """
+
+            tmp1 = t_PixRFCoupling.dimshuffle(1, 2, 0, 3, 4).reshape(
+                (self.l_i ** 2, -1))
+            # i2i1 bjt
+
+            tmp2 = t_Dp.reshape((self.n_l, -1)) #k i2i1
+
+            tmp3 = T.dot(tmp2, tmp1)  # k bjt
+            n_b, n_t = self.t_Wbt.shape
+            return tmp3.reshape(
+                (self.n_l, n_b, self.n_n, n_t)).dimshuffle(
+                    1, 0, 2, 3)
+
+        t_SpRFCoupling = pix_rf_to_sp_rf(t_PixRFCoupling, t_Dp)
+
 
         # b, k, j, t
         t_dlogFPdA = dlogfp_dA(
@@ -246,12 +270,38 @@ class TheanoBackend(object):
             self.t_SMIN, self.t_SMAX)
 
         # b, k, k', j, t -> k, k'
-        t_dE_R_dAA = (
-            self.t_Wbt.dimshuffle(0, 'x', 'x', 'x', 1) *
-            t_dlogFPdA.dimshuffle(0, 'x', 1, 2, 3) *
-            t_dlogFPdA.dimshuffle(0, 1, 'x', 2, 3) *
-            self.t_FP.dimshuffle(0, 'x', 'x', 1, 2)
-        ).sum(axis=(0, 3, 4))
+        #  t_dE_R_dAA = (
+        #      self.t_Wbt.dimshuffle(0, 'x', 'x', 'x', 1) *
+        #      t_dlogFPdA.dimshuffle(0, 'x', 1, 2, 3) *
+        #      t_dlogFPdA.dimshuffle(0, 1, 'x', 2, 3) *
+        #      self.t_FP.dimshuffle(0, 'x', 'x', 1, 2)
+        #  ).sum(axis=(0, 3, 4))
+
+        def calc_hessian(t_Wbt, t_dlogFPdA, t_FP):
+            """
+            Calculate the hessian given the following
+
+            Parameters
+            ----------
+            t_Wbt : theano.tensor, shape (b, t)
+            t_dlogFPdA : theano.tensor, shape (b,k,j,t)
+            t_FP : theano.tensor, shape (b, j, t)
+
+            Returns
+            -------
+            t_dE_R_dAA : theano.tensor, shape (k, k')
+            """
+
+            tmp = t_Wbt.dimshuffle(0, 'x', 1) * t_FP # b, j, t
+            tmp1 = tmp.dimshuffle(0, 'x', 1, 2) * t_dlogFPdA
+
+            return T.dot(
+                tmp1.dimshuffle(1, 0, 2, 3).reshape((self.n_l, -1)),
+                t_dlogFPdA.dimshuffle(1, 0, 2, 3).reshape((self.n_l, -1)).T
+            )
+
+        t_dE_R_dAA = calc_hessian(self.t_Wbt, t_dlogFPdA, self.t_FP)
+
 
         self.t_dlogFPdA = t_dlogFPdA
         self.t_dE_R_dAA = t_dE_R_dAA

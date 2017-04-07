@@ -66,12 +66,12 @@ def _build_base_masks(l_img):
     itr = product([0, l_img/4, l_img/2],
                   [0, l_img/4, l_img/2])
     itr = [i for i in itr]
-    masks = np.zeros((3 + len(itr), l_img, l_img))
+    masks = np.zeros((1 + len(itr), l_img, l_img))
     for i, (u, v) in enumerate(itr):
         masks[i,
               u:u + l_img / 2,
               v:v + l_img / 2] = 1
-        masks[-3:] = 1
+        masks[-1] = 1
     return masks
 
 def sparsifying_mask(l_img, n_sp):
@@ -232,6 +232,8 @@ class SparseCoder(object):
 
         sort_idx = np.argsort(np.abs(A))[::-1]
         n_active = np.sum(np.abs(A) > 0.2)
+        if n_active == 0:
+            return
         active_idx = sort_idx[0:n_active]
 
         plt.title('Histogram of sparse Coefficients: \n Percentage of active coefficients {:.0f}%'.format(
@@ -337,6 +339,12 @@ class TheanoBackend(object):
         fista_step = theano.function(inputs = [t_L, t_I_idx],
                                      outputs = [t_E, t_E_rec, t_E_sp, t_SNR],
                                      updates = fist_updates)
+        test_grad = theano.function(inputs=[t_I_idx],
+                                    #  outputs=[T.grad(t_E_rec, t_A)])
+                                    outputs=[t_E_rec,
+                                             T.mean((T.grad(t_E_rec, t_A)) ** 2)])
+        self.test_grad = test_grad
+
         self.t_A = t_A
         self.t_fista_X = t_fista_X
         self.t_T = t_T
