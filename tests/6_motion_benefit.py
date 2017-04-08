@@ -78,8 +78,8 @@ for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
     emb = EMBurak(
         ig.img, D, motion_gen, motion_prior, n_t=args.n_t, save_mode=True,
         s_gen_name=ig.img_name, ds=ds, neuron_layout='hex', fista_c=0.8,
-        de=de, l_n=8, n_itr=n_itr, lamb=0.0, tau=1.28, n_g_itr=320,
-        output_dir_base=args.output_dir)
+        de=de, l_n=8.1, n_itr=n_itr, lamb=0.0, tau=1.28, n_g_itr=320,
+        output_dir_base=args.output_dir, print_mode=True)
     #  for _ in range(args.n_repeats):
     #      XR, YR, R = emb.gen_data(ig.img)
     #      emb.run_inference_true_path(R, XR, YR)

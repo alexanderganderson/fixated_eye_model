@@ -12,9 +12,6 @@ def gen_hex_lattice(w, a=1.):
     L = 2 * w / a + 1
     i, j = np.meshgrid(np.arange(-L, L), np.arange(-L, L))
     i, j = i.ravel()[None, :], j.ravel()[None, :]
-    # Random center
-    i0, j0 = np.random.rand(2)
-    i, j = i + i0, j + j0
     # Random rotation
     theta = np.random.rand(1)[0] * 2 * np.pi
     R = np.array([[np.cos(theta), np.sin(theta)],
@@ -22,14 +19,21 @@ def gen_hex_lattice(w, a=1.):
     u, v = np.array([[1], [0]]), np.array([[0.5], [np.sqrt(3)/2]])
     u, v = np.dot(R, u), np.dot(R, v)
     XE, YE = a * (u * i + v * j)
-    idx = np.sqrt(XE ** 2 + YE ** 2) < w
+    idx = XE ** 2 + YE ** 2 < w ** 2
     XE, YE = XE[idx], YE[idx]
+    # Random center
+    i0, j0 = (np.random.rand(2) - 0.5)
+    XE, YE = XE + i0 * a, YE + i0 * a
     return XE, YE
 
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    XE, YE = gen_hex_lattice(5, 0.5)
+    for i in range(10):
+        XE, YE = gen_hex_lattice(5.01, 0.5)
+        print len(XE)
+
+
     plt.scatter(XE, YE)
     plt.axes().set_aspect('equal')
     plt.show()
