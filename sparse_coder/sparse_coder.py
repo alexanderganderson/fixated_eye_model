@@ -133,12 +133,13 @@ class SparseCoder(object):
             pkl.dump(d, fn)
 
     @classmethod
-    def restore(cls, data, path):
+    def restore(cls, data, path, n_bat=None):
         with open(path, 'rb') as fn:
             d = pkl.load(fn)
-
+        if n_bat is None:
+            n_bat = d['n_bat']
         sparse_coder = cls(
-            data, n_sp=d['n_sp'], n_bat=d['n_bat'], alpha=d['alpha'],
+            data, n_sp=d['n_sp'], n_bat=n_bat, alpha=d['alpha'],
             d_scale=d['d_scale'], pos_only=d['pos_only'], sparsify=d['sparsify'])
 
         sparse_coder.tc.t_D.set_value(d['D'])

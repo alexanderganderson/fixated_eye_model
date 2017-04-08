@@ -478,8 +478,9 @@ class EMBurak(object):
             if self.print_mode:
                 if v == 0:
                     es0 = es
-                des = [Ei - E0 for Ei, E0 in zip(es, es0)]
-                print self.get_cost_string(des, tf - t0)  # + str(self.img_SNR)
+                if v % 50 == 0:
+                    des = [Ei - E0 for Ei, E0 in zip(es, es0)]
+                    print self.get_cost_string(des, tf - t0)  # + str(self.img_SNR)
 
         self.tc.update_HB(xr, yr, w)
         if self.print_mode:
