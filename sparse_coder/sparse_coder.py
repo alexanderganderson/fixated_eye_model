@@ -39,7 +39,7 @@ def get_effective_dimensionality(data, var_thresh=0.9):
     return d_eff
 
 
-def get_pca_basis(data, var_thresh=0.9):
+def get_pca_basis(data, var_thresh=0.9, d_eff=None):
     """
     Get the effective dimensionality of a dataset using PCA.
 
@@ -58,7 +58,8 @@ def get_pca_basis(data, var_thresh=0.9):
     IM_cov = np.cov(data.T)
     evals, evecs = eigh(IM_cov)
     cs = np.cumsum(evals[::-1])
-    d_eff = np.argmax(cs > cs[-1] * var_thresh) # Effective Dim of data
+    if d_eff is None:
+        d_eff = np.argmax(cs > cs[-1] * var_thresh) # Effective Dim of data
     return evecs.T[::-1][0:d_eff]
 
 
