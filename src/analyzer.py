@@ -127,7 +127,7 @@ class DataAnalyzer:
         try:
             snr1 = self.data[snr_key]
         except KeyError:
-            print 'Computing SNR for iteration: {}'.format(q)
+            #  print 'Computing SNR for iteration: {}'.format(q)
 
             q_data = self.data['EM_data/{}'.format(q)]
 
