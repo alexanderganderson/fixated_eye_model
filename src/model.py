@@ -17,7 +17,7 @@ from utils.time_filename import time_string
 from utils.BurakPoissonLP import PoissonLP
 from utils.hex_lattice import gen_hex_lattice
 from src.theano_backend import TheanoBackend
-
+from src.analyzer import snr
 
 class EMBurak(object):
     """Produce spikes and infers the causes that generated those spikes."""
@@ -29,7 +29,8 @@ class EMBurak(object):
             ds=1., de=1., lamb=0.,
             tau=1.28, save_mode=False, n_itr=20, s_gen_name=' ',
             output_dir_base='', n_g_itr=40, fista_c=0.8, n_p=20,
-            print_mode=True, gamma=10., s_range='pos'
+            print_mode=True, gamma=10., s_range='pos',
+            save_pix_rf_coupling=False
     ):
         """
         Initialize the parts of the EM algorithm.
@@ -97,6 +98,7 @@ class EMBurak(object):
         self.data = {}
         self.save_mode = save_mode
         self.print_mode = print_mode
+        self.save_pix_rf_coupling = save_pix_rf_coupling
 
         if s_range == 'pos':
             smin, smax = 0, 1
@@ -474,7 +476,8 @@ class EMBurak(object):
 
         for v in range(n_g_itr):
             es = self.tc.run_fista_step(xr, yr, r, w, fista_l)
-            # self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
+            #  self.img_SNR = 0.  # SNR(self.s_gen, self.tc.image_est())
+
             if self.print_mode:
                 if v == 0:
                     es0 = es
@@ -536,6 +539,13 @@ class EMBurak(object):
                 'path_sdevs': self.pf.sdevs,
                 'image_est': self.tc.image_est(),
                 'coeff_est': self.tc.get_A()}
+
+            if self.save_pix_rf_coupling:
+                xr = self.pf.XS[t0:tf, :, 0].transpose()
+                yr = self.pf.XS[t0:tf, :, 1].transpose()
+                w = self.pf.WS[t0:tf].transpose()
+                tmp = self.tc.get_sp_rf_coupling(xr, yr, w)
+                iteration_data['pix_rf_coupling'] = tmp
 
             em_data[u] = iteration_data
         em_data['mode'] = 'EM'
@@ -654,7 +664,8 @@ class EMBurak(object):
 
         fn = os.path.join(self.output_dir,
                           'data_' + time_string() + '.pkl')
-        pkl.dump(self.data, open(fn, 'wb'))
+        with open(fn, 'wb') as f:
+            pkl.dump(self.data, f)
         return fn
 
     def calculate_inner_products(self, s_gen, xr, yr):
@@ -677,6 +688,13 @@ class EMBurak(object):
             self.pf.XS[:, :, 1].transpose(),
             r,
             self.pf.WS[:].transpose())[2]
+
+    def get_sp_rf_test(self):
+        u, v = self.tc.sp_rf_test(
+            self.pf.XS[:, :, 0].transpose(),
+            self.pf.XS[:, :, 1].transpose(),
+            self.pf.WS[:].transpose())
+        return u, v
 
     def ideal_observer_cost(self, xr, yr, r, s):
         """

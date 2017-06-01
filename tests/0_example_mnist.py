@@ -9,7 +9,7 @@ from utils.image_gen import ImageGenerator
 
 run_analyzer = False
 check_gradient = True
-
+check_pix_rf = True
 
 # Tests the algorithm using a '0' from mnist and a sparse coding dictionary
 
@@ -32,7 +32,7 @@ motion_gen = {'mode': 'Diffusion', 'dc': 100.}
 motion_prior = {'mode': 'PositionDiffusion', 'dc': 100.}
 
 emb = EMBurak(s_gen - 0.5, D, motion_gen, motion_prior, n_t=10, save_mode=True,
-              s_gen_name=s_gen_name, n_itr=10, lamb=0.0, s_range='sym')
+              s_gen_name=s_gen_name, n_itr=2, lamb=0.0, s_range='sym')
 XR, YR, R = emb.gen_data(s_gen)
 
 
@@ -71,8 +71,15 @@ if check_gradient:
 
     #  import pdb; pdb.set_trace()
 
+if check_pix_rf:
+    u, v = emb.get_sp_rf_test()
 
+    def norm_angle(u, v):
+        u = u.ravel()
+        v = v.ravel()
+        return (u * v).sum() / np.sqrt( (u * u).sum() * (v * v).sum())
 
+    print norm_angle(u, v)
 
 
 # # Plot the Estimated Image and Path after the algorithm ran

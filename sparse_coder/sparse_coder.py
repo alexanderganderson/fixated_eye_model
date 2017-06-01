@@ -8,6 +8,8 @@ import cPickle as pkl
 import theano
 import theano.tensor as T
 
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 from fista import fista_updates, ista_updates

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
-                colorbar=True, fig=None, ax=None):
+                colorbar=True, fig=None, ax=None, alpha=1.):
     """
     Plot a collection of images.
 
@@ -41,7 +41,8 @@ def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
     else:
         m0 = -mm
     m1 = mm
-    cax = ax.imshow(out, cmap=cmap, interpolation='nearest', vmin=m0, vmax=m1)
+    cax = ax.imshow(out, cmap=cmap, interpolation='nearest', vmin=m0, vmax=m1,
+                   alpha=alpha)
     if colorbar:
         fig.colorbar(cax, ax=ax)
     ax.set_axis_off()

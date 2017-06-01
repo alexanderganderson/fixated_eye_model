@@ -2,7 +2,10 @@
 
 import numpy as np
 from scipy.signal import convolve2d
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
+
 from scipy.io import loadmat
 
 

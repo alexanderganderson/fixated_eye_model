@@ -5,6 +5,8 @@ import cPickle as pkl
 import sys
 import os
 # from scipy.ndimage.filters import gaussian_filter
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 
@@ -101,7 +103,8 @@ class DataAnalyzer:
             Path to file containing data file from EM run
                 contains a datadict
         """
-        data = pkl.load(open(filename, 'rb'))
+        with open(filename, 'rb') as f:
+            data = pkl.load(f)
         return cls(data)
 
     def snr_one_iteration(self, q, img=None):

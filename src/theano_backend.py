@@ -238,7 +238,7 @@ class TheanoBackend(object):
         # k, i2, i1 -> _, k, i2, i1, _, _
         # b, k, j, t
 
-        #  t_SpRFCoupling = (
+        #  t_SpRFCoupling1 = (
         #      t_PixRFCoupling.dimshuffle(0, 'x', 1, 2, 3, 4) *
         #      t_Dp.dimshuffle('x', 0, 1, 2, 'x', 'x')).sum(axis=(2, 3))
 
@@ -263,19 +263,32 @@ class TheanoBackend(object):
 
         t_SpRFCoupling = pix_rf_to_sp_rf(t_PixRFCoupling, t_Dp)
 
+        #  self.sp_rf_test= theano.function(
+        #      inputs=[self.t_XR, self.t_YR, self.t_Wbt],
+        #      outputs=[t_SpRFCoupling, t_SpRFCoupling1])
+
+
+        # Get RGC Sparse Coeff couplings
+        # bkjt,bt-> kj
+        t_SpRGCCoupling = (self.t_Wbt.dimshuffle(0, 'x', 'x', 1) *
+                           t_SpRFCoupling).sum(axis=(0, 3))
+
+        self.get_sp_rf_coupling = theano.function(
+            inputs=[self.t_XR, self.t_YR, self.t_Wbt],
+            outputs=t_SpRGCCoupling)
 
         # b, k, j, t
         t_dlogFPdA = dlogfp_dA(
             t_SpRFCoupling, self.t_G, self.t_IE, self.t_L0, self.t_L1,
             self.t_SMIN, self.t_SMAX)
 
-        # b, k, k', j, t -> k, k'
-        #  t_dE_R_dAA = (
-        #      self.t_Wbt.dimshuffle(0, 'x', 'x', 'x', 1) *
-        #      t_dlogFPdA.dimshuffle(0, 'x', 1, 2, 3) *
-        #      t_dlogFPdA.dimshuffle(0, 1, 'x', 2, 3) *
-        #      self.t_FP.dimshuffle(0, 'x', 'x', 1, 2)
-        #  ).sum(axis=(0, 3, 4))
+        #  b, k, k', j, t -> k, k'
+        t_dE_R_dAA1 = (
+            self.t_Wbt.dimshuffle(0, 'x', 'x', 'x', 1) *
+            t_dlogFPdA.dimshuffle(0, 'x', 1, 2, 3) *
+            t_dlogFPdA.dimshuffle(0, 1, 'x', 2, 3) *
+            self.t_FP.dimshuffle(0, 'x', 'x', 1, 2)
+        ).sum(axis=(0, 3, 4))
 
         def calc_hessian(t_Wbt, t_dlogFPdA, t_FP):
             """
@@ -302,6 +315,9 @@ class TheanoBackend(object):
 
         t_dE_R_dAA = calc_hessian(self.t_Wbt, t_dlogFPdA, self.t_FP)
 
+        self.sp_rf_test= theano.function(
+            inputs=[self.t_XR, self.t_YR, self.t_Wbt],
+            outputs=[t_dE_R_dAA, t_dE_R_dAA1])
 
         self.t_dlogFPdA = t_dlogFPdA
         self.t_dE_R_dAA = t_dE_R_dAA
