@@ -39,7 +39,7 @@ XR, YR, R = emb.gen_data(s_gen)
 emb.run_em(R)
 
 
-    # emb.save()
+emb.save()
 
 if run_analyzer:
     da = DataAnalyzer(emb.data)

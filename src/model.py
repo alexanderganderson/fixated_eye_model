@@ -18,6 +18,7 @@ from utils.BurakPoissonLP import PoissonLP
 from utils.hex_lattice import gen_hex_lattice
 from src.theano_backend import TheanoBackend
 from src.analyzer import snr
+from utils.h5py_utils import save_dict
 
 class EMBurak(object):
     """Produce spikes and infers the causes that generated those spikes."""
@@ -651,7 +652,7 @@ class EMBurak(object):
                      'R': r,
                      'Ips': self.Ips, 'FP': self.FP}
 
-    def save(self):
+    def save(self, compute_snrs=True):
         """
         Save information relevant to the EM run.
 
@@ -664,8 +665,11 @@ class EMBurak(object):
 
         fn = os.path.join(self.output_dir,
                           'data_' + time_string() + '.pkl')
-        with open(fn, 'wb') as f:
-            pkl.dump(self.data, f)
+        save_dict(fn=fn, d=self.data)
+        if compute_snrs:
+            from src.analyzer import DataAnalyzer
+            da = DataAnalyzer.fromfilename(fn)
+            da.snr_list()
         return fn
 
     def calculate_inner_products(self, s_gen, xr, yr):

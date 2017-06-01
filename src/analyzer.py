@@ -9,6 +9,7 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
+from utils.h5py_utils import LazyDict
 
 def inner_product(p1, l1x, l1y,
                   p2, l2x, l2y, var):
@@ -22,17 +23,18 @@ def inner_product(p1, l1x, l1y,
     each pixel is surrounded by a gaussian with variance var
     """
     n = l1x.shape[0]
-    l1x = l1x.reshape(n, 1)
-    l2x = l2x.reshape(1, n)
+    l1x = l1x.reshape(n, 1).astype('float32')
+    l2x = l2x.reshape(1, n).astype('float32')
 
-    l1y = l1y.reshape(n, 1)
-    l2y = l2y.reshape(1, n)
+    l1y = l1y.reshape(n, 1).astype('float32')
+    l2y = l2y.reshape(1, n).astype('float32')
+    var = var.astype('float32')
 
     coupling = np.exp(-((l1x - l2x) ** 2 +
                         (l1y - l2y) ** 2) / (4 * var))
 
-    return np.einsum('i,j,ij->', p1, p2, coupling)
-
+    #  return np.einsum('i,j,ij->', p1, p2, coupling)
+    return np.dot(p1, coupling).dot(p2)
 
 def snr(p1, l1x, l1y, p2, l2x, l2y, var):
     """
@@ -66,10 +68,10 @@ class DataAnalyzer:
         self.DT = self.data['DT']
         self.N_T = int(self.data['N_T'])
 
-        self.xr = self.data['XR'][0]
-        self.yr = self.data['YR'][0]
-        self.S_gen = self.data['S_gen']
-        self.Var = self.data['Var'][0]
+        self.xr = self.data['XR'][0].astype('float32')
+        self.yr = self.data['YR'][0].astype('float32')
+        self.S_gen = self.data['S_gen'].astype('float32')
+        self.Var = self.data['Var'][0].astype('float32')
 
         self.blur_sdev = float(np.sqrt(0.5))
         # float(np.sqrt(self.Var)) / self.data['ds']
@@ -83,8 +85,9 @@ class DataAnalyzer:
         self.L_N = self.data['L_N']
 
         # Convert retinal positions to grid
-        xs = self.data['XS']
-        ys = self.data['YS']
+        xs = self.data['XS'].astype('float32')
+        ys = self.data['YS'].astype('float32')
+
 
         xs, ys = np.meshgrid(xs, ys)
         self.xs = xs.ravel()
@@ -103,8 +106,7 @@ class DataAnalyzer:
             Path to file containing data file from EM run
                 contains a datadict
         """
-        with open(filename, 'rb') as f:
-            data = pkl.load(f)
+        data = LazyDict(fn=filename)
         return cls(data)
 
     def snr_one_iteration(self, q, img=None):
@@ -121,30 +123,41 @@ class DataAnalyzer:
             (There is a degeneracy in the representation that this
             fixes. )
         """
-        s_est = self.data['EM_data'][q]['image_est']
-        t = self.data['EM_data'][q]['time_steps']
-
+        snr_key = 'EM_data/{}/SNR'.format(q)
         try:
-            xyr_est = self.data['EM_data'][q]['path_means']
-            xr_est = xyr_est[:, 0]
-            yr_est = xyr_est[:, 1]
-
-            dx = np.mean(self.xr[0:t] - xr_est[0:t])
-            dy = np.mean(self.yr[0:t] - yr_est[0:t])
+            snr1 = self.data[snr_key]
         except KeyError:
-            dx = 0.
-            dy = 0.
-        self.dx = dx
-        self.dy = dy
-        if img is None:
-            img = self.S_gen
-        i1 = img.ravel()
-        i2 = s_est.ravel()
-        i1 = i1 / i1.max()
-        i2 = i2 / i2.max()
-        return snr(i1, self.xs, self.ys,
-                   i2, self.xs + dx, self.ys + dy,
-                   var=(self.data['ds'] * 0.5) ** 2)
+            print 'Computing SNR for iteration: {}'.format(q)
+
+            q_data = self.data['EM_data/{}'.format(q)]
+
+            s_est = q_data['image_est']
+            t = q_data['time_steps']
+
+            try:
+                xyr_est = q_data['path_means']
+                xr_est = xyr_est[:, 0]
+                yr_est = xyr_est[:, 1]
+
+                dx = np.mean(self.xr[0:t] - xr_est[0:t])
+                dy = np.mean(self.yr[0:t] - yr_est[0:t])
+            except KeyError:
+                dx = 0.
+                dy = 0.
+            self.dx = dx
+            self.dy = dy
+            if img is None:
+                img = self.S_gen
+            i1 = img.ravel()
+            i2 = s_est.ravel()
+            i1 = i1 / i1.max()
+            i2 = i2 / i2.max()
+            snr1 = snr(i1, self.xs, self.ys,
+                       i2, self.xs + dx, self.ys + dy,
+                       var=(self.data['ds'] * 0.5) ** 2)
+            self.data[snr_key] = snr1
+
+        return snr1
 
     def snr_list(self):
         """Return a list giving the SNR after each iteration."""
@@ -166,21 +179,21 @@ class DataAnalyzer:
         d : int
             Dimension to plot (either 0 or 1)
         """
-        est_mean = self.data['EM_data'][q]['path_means']
-        est_sdev = self.data['EM_data'][q]['path_sdevs']
+        q_data = self.data['EM_data/{}'.format(q)]
+        est_mean = q_data['path_means']
+        est_sdev = q_data['path_sdevs']
 
         if (d == 0):
             path = self.xr
             label = 'X'
-            dxy = self.dx
+            #  dxy = self.dx
         elif (d == 1):
             path = self.yr
             label = 'Y'
-            dxy = self.dy
+            #  dxy = self.dy
         else:
             raise ValueError('d must be either 0 or 1')
 
-        # t = self.data['EM_data'][q]['time_steps']
 
         ax.fill_between(self.DT * np.arange(self.N_T),
                         est_mean[:, d] - est_sdev[:, d],
@@ -196,61 +209,61 @@ class DataAnalyzer:
             #  ax.set_title(label + ' Pos., shift = %.2f' % dxy)
             ax.set_title('{} Position'.format(label))
 
-    def plot_velocity_estimate(self, q, d):
-        """
-        Plot the estimate of the velocity by the EM algorithm.
+    #  def plot_velocity_estimate(self, q, d):
+    #      """
+    #      Plot the estimate of the velocity by the EM algorithm.
 
-        q - EM iteration number
-        d - dimension to plot (0 or 1)
-        """
-        if not self.data['motion_prior']['mode'] == 'VelocityDiffusion':
-            raise RuntimeError('No velocity for this motion prior')
+    #      q - EM iteration number
+    #      d - dimension to plot (0 or 1)
+    #      """
+    #      if not self.data['motion_prior/mode'] == 'VelocityDiffusion':
+    #          raise RuntimeError('No velocity for this motion prior')
 
-        est_mean = self.data['EM_data'][q]['path_means']
-        est_sdev = self.data['EM_data'][q]['path_sdevs']
+    #      est_mean = self.data['EM_data'][q]['path_means']
+    #      est_sdev = self.data['EM_data'][q]['path_sdevs']
 
-        if d == 0:
-            label = 'Hor.'
-        elif d == 1:
-            label = 'Ver.'
-        else:
-            raise ValueError('d must be either 0 or 1')
+    #      if d == 0:
+    #          label = 'Hor.'
+    #      elif d == 1:
+    #          label = 'Ver.'
+    #      else:
+    #          raise ValueError('d must be either 0 or 1')
 
-        # t = self.data['EM_data'][q]['time_steps']
+    #      # t = self.data['EM_data'][q]['time_steps']
 
-        d = d + 2  # Correct index for est_mean
+    #      d = d + 2  # Correct index for est_mean
 
-        plt.fill_between(self.DT * np.arange(self.N_T),
-                         est_mean[:, d] - est_sdev[:, d],
-                         est_mean[:, d] + est_sdev[:, d],
-                         alpha=0.5, linewidth=1.)
-        plt.plot(self.DT * np.arange(self.N_T),
-                 est_mean[:, d], label=label + 'estimate')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Velocity (pixels/sec)')
-        # plt.legend()
+    #      plt.fill_between(self.DT * np.arange(self.N_T),
+    #                       est_mean[:, d] - est_sdev[:, d],
+    #                       est_mean[:, d] + est_sdev[:, d],
+    #                       alpha=0.5, linewidth=1.)
+    #      plt.plot(self.DT * np.arange(self.N_T),
+    #               est_mean[:, d], label=label + 'estimate')
+    #      plt.xlabel('Time (s)')
+    #      plt.ylabel('Velocity (pixels/sec)')
+    #      # plt.legend()
 
-    def plot_dynamic_vars(self, q):
-        """
-        Plot all of the dynamic variables (x, y, vx, vy).
+    #  def plot_dynamic_vars(self, q):
+    #      """
+    #      Plot all of the dynamic variables (x, y, vx, vy).
 
-        q : int
-            EM iteration to plot.
-        """
-        if not self.data['motion_prior']['mode'] == 'VelocityDiffusion':
-            raise RuntimeError('Run has no velocity estimate')
+    #      q : int
+    #          EM iteration to plot.
+    #      """
+    #      if not self.data['motion_prior']['mode'] == 'VelocityDiffusion':
+    #          raise RuntimeError('Run has no velocity estimate')
 
-        plt.subplot(2, 2, 1)
-        self.plot_path_estimate(q, 0, title=False)
+    #      plt.subplot(2, 2, 1)
+    #      self.plot_path_estimate(q, 0, title=False)
 
-        plt.subplot(2, 2, 2)
-        self.plot_path_estimate(q, 1, title=False)
+    #      plt.subplot(2, 2, 2)
+    #      self.plot_path_estimate(q, 1, title=False)
 
-        plt.subplot(2, 2, 3)
-        self.plot_velocity_estimate(q, 0)
+    #      plt.subplot(2, 2, 3)
+    #      self.plot_velocity_estimate(q, 0)
 
-        plt.subplot(2, 2, 4)
-        self.plot_velocity_estimate(q, 1)
+    #      plt.subplot(2, 2, 4)
+    #      self.plot_velocity_estimate(q, 1)
 
     def plot_image_estimate(self, fig, ax, q, cmap=plt.cm.gray,
                             colorbar=True, vmax=None):
@@ -258,8 +271,10 @@ class DataAnalyzer:
         if q == -1:
             q = self.N_itr - 1
 
+
+        image_est = self.data['EM_data/{}/image_est'.format(q)].ravel()
         res = _get_sum_gaussian_image(
-            self.data['EM_data'][q]['image_est'].ravel(),
+            image_est,
             self.xs, self.ys,
             self.data['ds'] / np.sqrt(2), n=100)
         ax.set_title('Estimated Image, S = DA:\n SNR = %.2f'
@@ -291,7 +306,7 @@ class DataAnalyzer:
         if q == -1:
             q = self.N_itr - 1
 
-        n_time_steps = self.data['EM_data'][q]['time_steps']
+        n_time_steps = self.data['EM_data/{}/time_steps'.format(q)]
         t_ms = self.DT * n_time_steps * 1000.
 
         if figsize is None:

@@ -46,6 +46,7 @@ def _save_dict(f, d, base=''):
             raise ValueError('Unknown type for v: {}'.format(type(v)))
 
 
+
 def get_dict(fn, base=''):
     """
     Return a dictionary from the file starting at base.
@@ -70,7 +71,16 @@ def _get_dict(f, base):
             raise ValueError('Unknown type for v: {}'.format(type(v)))
     return d
 
+class LazyDict(object):
+    def __init__(self, fn):
+        self.fn = fn
 
+    def __getitem__(self, val):
+        return get_dict(self.fn, val)
+
+    def __setitem__(self, key, val):
+        with h5py.File(self.fn, 'r+') as f:
+            f[key] = val
 
 
 if __name__ == '__main__':
