@@ -95,6 +95,9 @@ class DataAnalyzer:
 
         self.N_itr = self.data['N_itr']
 
+        # Dictionary to store image estimates (high res)
+        self.image_ests = {}
+
     @classmethod
     def fromfilename(cls, filename):
         """
@@ -271,12 +274,17 @@ class DataAnalyzer:
         if q == -1:
             q = self.N_itr - 1
 
+        try:
+            res = self.image_ests[q]
+        except KeyError:
 
-        image_est = self.data['EM_data/{}/image_est'.format(q)].ravel()
-        res = _get_sum_gaussian_image(
-            image_est,
-            self.xs, self.ys,
-            self.data['ds'] / np.sqrt(2), n=100)
+            image_est = self.data['EM_data/{}/image_est'.format(q)].ravel()
+            res = _get_sum_gaussian_image(
+                image_est,
+                self.xs, self.ys,
+                self.data['ds'] / np.sqrt(2), n=100)
+            self.image_ests[q] = res
+
         ax.set_title('Estimated Image, S = DA:\n SNR = %.2f'
                   % self.snr_one_iteration(q))
         # FIXME: extent calculation could break in future
@@ -290,11 +298,14 @@ class DataAnalyzer:
     def plot_base_image(self, fig, ax, colorbar=True, alpha=1.,
                         cmap=plt.cm.gray_r, dx=0., dy=0.):
         """Plot the original image that generates the data."""
-        res = _get_sum_gaussian_image(
-            self.S_gen.ravel(), self.xs, self.ys,
-            self.data['ds'] / np.sqrt(2), n=100)
+        try:
+            self.base_image
+        except AttributeError:
+            self.base_image = _get_sum_gaussian_image(
+                self.S_gen.ravel(), self.xs, self.ys,
+                self.data['ds'] / np.sqrt(2), n=100)
         a = self.data['ds'] * self.L_I / 2
-        cax = ax.imshow(res, cmap=cmap, interpolation='nearest',
+        cax = ax.imshow(self.base_image, cmap=cmap, interpolation='nearest',
                         extent=[-a - dx, a - dx, -a + dy, a + dy],
                         alpha=alpha)
         if colorbar:
