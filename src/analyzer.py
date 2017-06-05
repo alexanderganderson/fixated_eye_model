@@ -95,6 +95,8 @@ class DataAnalyzer:
 
         self.N_itr = self.data['N_itr']
 
+        self.s_range = 'sym'  # 'pos'
+
         # Dictionary to store image estimates (high res)
         self.image_ests = {}
 
@@ -197,15 +199,16 @@ class DataAnalyzer:
         else:
             raise ValueError('d must be either 0 or 1')
 
-
-        ax.fill_between(self.DT * np.arange(self.N_T),
+        tt = self.DT * np.arange(self.N_T)
+        ax.fill_between(tt,
                         est_mean[:, d] - est_sdev[:, d],
                         est_mean[:, d] + est_sdev[:, d],
                         alpha=0.5, linewidth=0.25)
-        ax.plot(self.DT * np.arange(self.N_T),
-                 est_mean[:, d], label='estimate')
-        ax.plot(self.DT * np.arange(self.N_T),
-                 path, label='actual')
+        ax.plot(tt,
+                est_mean[:, d], label='estimate')
+        ax.plot(tt,
+                path, label='actual')
+        ax.set_xlim([0, self.DT * self.N_T])
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Relative position (arcmin)')
         if title:
@@ -289,9 +292,10 @@ class DataAnalyzer:
                   % self.snr_one_iteration(q))
         # FIXME: extent calculation could break in future
         a = self.data['ds'] * self.L_I / 2
-        cax = ax.imshow(res, cmap=cmap, interpolation='nearest',
-                        extent=[-a, a, -a, a],
-                        vmax=vmax)
+
+        cax = _imshow(ax=ax, img=res, cmap=cmap, mode=self.s_range,
+                      extent=[-a, a, -a, a], vmax=vmax)
+
         if colorbar:
             fig.colorbar(cax, ax=ax)
 
@@ -305,9 +309,14 @@ class DataAnalyzer:
                 self.S_gen.ravel(), self.xs, self.ys,
                 self.data['ds'] / np.sqrt(2), n=100)
         a = self.data['ds'] * self.L_I / 2
-        cax = ax.imshow(self.base_image, cmap=cmap, interpolation='nearest',
-                        extent=[-a - dx, a - dx, -a + dy, a + dy],
-                        alpha=alpha)
+
+        img = self.base_image
+        mm = abs(img).max()
+        cax = _imshow(ax=ax, img=self.base_image, cmap=cmap,
+                      mode=self.s_range,
+                      extent=[-a - dx, a - dx, -a + dy, a + dy],
+                      alpha=alpha)
+
         if colorbar:
             fig.colorbar(cax, ax=ax)
             ax.set_title('Stationary Object in the World')
@@ -518,7 +527,8 @@ class DataAnalyzer:
                 output_dir,
                 'em_est_{}_{:03}.jpg'.format(tag, i)), dpi=50)
 
-    def plot_image_and_rfs(self, fig=None, ax=None, legend=True, q=None, alpha_rf=0.5):
+    def plot_image_and_rfs(self, fig=None, ax=None, legend=True, q=None,
+                           alpha_rf=0.5, cmap=plt.cm.gray_r):
         """Plot the image with the neuron RF centers."""
         if fig is None:
             fig, ax = plt.subplots(1, 1)
@@ -532,9 +542,17 @@ class DataAnalyzer:
             dy = self.yr[q]
             xr, yr = self.xr[0:q], self.yr[0:q]
 
-        self.plot_base_image(fig, ax, colorbar=False, alpha=1.,
-                             cmap=plt.cm.gray_r,
-                             dx=dx, dy=dy)
+        m = max(max(self.data['XE']), max(self.data['YE']))
+        ax.set_xlim([-m, m])
+        ax.set_ylim([-m, m])
+
+        if self.s_range == 'sym':
+            ax.imshow(np.zeros((1, 1)), cmap=cmap, vmin=-0.5, vmax=0.5,
+                      extent=[-m, m, -m, m])
+
+
+        self.plot_base_image(
+            fig, ax, colorbar=False, alpha=1., cmap=cmap, dx=dx, dy=dy)
 
 
         _plot_rfs(
@@ -543,9 +561,6 @@ class DataAnalyzer:
 
         ax.plot(-xr, yr, label='Eye path', c='g')
 
-        m = max(max(self.data['XE']), max(self.data['YE']))
-        ax.set_xlim([-m, m])
-        ax.set_ylim([-m, m])
 
 
     def plot_moving_image_and_spikes(self, q):
@@ -557,6 +572,23 @@ class DataAnalyzer:
         ax = plt.subplot(1, 3, 3)
         self.plot_spikes(ax, q, mode='OFF')
 
+
+def _imshow(ax, img, cmap, mode, extent=None, vmax=None, alpha=1.):
+    if mode == 'sym':
+        vmin0, vmax0 = -1, 1
+    elif mode == 'pos':
+        vmin0, vmax0 = 0, 1
+    else:
+        pass
+
+    if vmax is None:
+        mm = abs(img).max()
+        vmin, vmax = -mm, mm
+    else:
+        vmin, vmax = vmin0 * vmax, vmax0 * vmax
+
+    return ax.imshow(img, cmap=cmap, interpolation='nearest',
+              extent=extent, vmin=vmin, vmax=vmax, alpha=alpha)
 
 
 

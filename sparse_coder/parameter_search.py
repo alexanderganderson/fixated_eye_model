@@ -20,7 +20,7 @@ parser.add_argument('--n_bat', type=int, default=100,
 args = parser.parse_args()
 
 #  data = get_data_matrix(l_patch=args.l_patch)
-with h5py.File('data/final/new_extracted_patches.h5') as f:
+with h5py.File('data/final/new_extracted_patches1.h5') as f:
     assert args.l_patch == f['l_patch'].value
     data = f['white_patches'].value
     #  data = f['white_patches'][0:10000]
@@ -32,20 +32,27 @@ d_eff = get_effective_dimensionality(data[0:10000])
 print('Effective dimensionality {}'.format(d_eff))
 
 #  alpha_ = [0.01, 0.015, 0.02]
-alpha_ = [0.01]
+alpha_ = [0.015, 0.02]
 over_comp_ = [2, 3.]
 
 for alpha, over_comp in product(alpha_, over_comp_):
     n_sp = int(over_comp * d_eff)
-    sc = SparseCoder(data=data, n_sp=n_sp, alpha=alpha, n_bat=args.n_bat,
-                     d_scale=np.std(data).astype('float32'), sparsify=True)
+    sc = SparseCoder(
+        data=data,
+        n_sp=n_sp,
+        alpha=alpha,
+        n_bat=args.n_bat,
+        d_scale=np.std(data).astype('float32'),
+        sparsify_dictionary=True
+    )
 
     n_itr = args.n_itr
     scheme = (
         [[n_itr, 0.05]] +
         2 * [[n_itr, 0.02]] +
         3 * [[n_itr, 0.01]] +
-        3 * [[n_itr, 0.005]]
+        3 * [[n_itr, 0.005]] +
+        3 * [[n_itr, 0.002]]
     )
     for n_itr, eta in scheme:
         cost_list=[]
@@ -53,7 +60,7 @@ for alpha, over_comp in product(alpha_, over_comp_):
 
         path = os.path.join(
             args.output_dir,
-            'vh_sparse_coder_alpha_{:.3f}_overcomp_{:0.2f}_l_patch_{}.pkl'.format(
+            'vh_sparse_coder1_alpha_{:.3f}_overcomp_{:0.2f}_l_patch_{}.pkl'.format(
                 alpha, over_comp, args.l_patch))
         print 'Saving to {}'.format(path)
         sc.save(path)

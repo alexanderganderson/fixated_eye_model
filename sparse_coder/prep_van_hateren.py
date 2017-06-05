@@ -111,7 +111,7 @@ parser.add_argument('--l_patch', type=int, default=32,
 parser.add_argument('--num_patches', type=int, default=1000 * 500,
                     help='Number of patches to extract')
 parser.add_argument('--patch_file', type=str,
-                    default='data/final/new_extracted_patches.h5')
+                    default='data/final/new_extracted_patches1.h5')
 args = parser.parse_args()
 
 
@@ -123,8 +123,9 @@ if args.extract_patches:
 
     criterion = lambda x: True
     n_patches_test = int(args.num_patches / 50)
+    a = 4  # Increase window size to remove boundary artifacts
     patches = _extract_patches(
-            images, n_patches_test, args.l_patch, criterion)
+            images, n_patches_test, args.l_patch + 2 * a, criterion)
     patch_mean = patches.mean(axis=0, keepdims=True)
     patches -= patch_mean
 
@@ -133,11 +134,11 @@ if args.extract_patches:
 
     criterion = lambda x: _whiten_patch_fft(x - patch_mean[0]).std() > std
     patches = _extract_patches(
-        images, args.num_patches, args.l_patch, criterion)
+        images, args.num_patches, args.l_patch + 2 * a, criterion)
     patches -= patch_mean
 
     white_patches = whiten_patches_fft(patches)
-
+    white_patches = white_patches[:, a:-a, a:-a]
 
 
     with h5py.File(args.patch_file, 'w') as f:

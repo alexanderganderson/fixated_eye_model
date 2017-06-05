@@ -647,7 +647,6 @@ class EMBurak(object):
                      'tau': self.tau,
                      'XR': xr, 'YR': yr,
                      'IE': self.tc.t_IE.get_value(),
-                     # 'actual_motion_mode': self.pg.mode(),
                      'S_gen': s_gen, 'S_gen_name': self.s_gen_name,
                      'R': r,
                      'Ips': self.Ips, 'FP': self.FP}
@@ -664,7 +663,7 @@ class EMBurak(object):
             raise RuntimeError('Need to enable save mode to save')
 
         fn = os.path.join(self.output_dir,
-                          'data_' + time_string() + '.pkl')
+                          'data_' + time_string() + '.h5')
         save_dict(fn=fn, d=self.data)
         if compute_snrs:
             from src.analyzer import DataAnalyzer

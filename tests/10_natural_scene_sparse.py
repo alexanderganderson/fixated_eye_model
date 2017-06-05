@@ -16,7 +16,7 @@ from itertools import product
 from sparse_coder.sparse_coder import get_pca_basis
 from src.model import EMBurak
 
-output_dir = 'natural_sparsity_van_hateren2'
+output_dir = 'natural_sparsity_van_hateren3'
 #  output_dir = 'test'
 if False:
     n_t = 5
@@ -24,17 +24,17 @@ if False:
     n_g_itr = 1
 else:
     n_t = 600
-    n_repeats = 20
+    n_repeats = 4
     n_g_itr = 320
 
 n_itr = n_t / 5
 l_patch = 32
 
 # Sparse coding dictionary prior
-alpha = 0.015
+alpha = 0.02
 over_comp = 3
 path = ('sparse_coder/output/'
-        'vh_sparse_coder_alpha_{:.3f}_overcomp_{:0.2f}_l_patch_{}.pkl').format(
+        'vh_sparse_coder1_alpha_{:.3f}_overcomp_{:0.2f}_l_patch_{}.pkl').format(
         alpha, over_comp, l_patch)
 
 with open(path, 'r') as f:
@@ -43,93 +43,64 @@ with open(path, 'r') as f:
 print D1.shape
 d_eff = D1.shape[0] / over_comp
 
-
-
 # Load images
 
-with h5py.File('sparse_coder/data/final/new_extracted_patches.h5') as f:
+with h5py.File('sparse_coder/data/final/new_extracted_patches1.h5') as f:
     assert l_patch == f['l_patch'].value
     n_imgs = 10000
     data = f['white_patches'][0:n_imgs]
 
 
 img_idx = np.array([
-    434, 569, 752, 114,  78,   2, 263, 720, 986,  86, 115, 307, 385, 767, 959,
-    692, 399,  92, 886, 488, 100, 606, 209, 148, 646, 600, 662, 533, 618, 860,
-    427, 115, 798, 826,  48, 724, 116, 569, 307, 302, 232, 469, 688, 624, 134,
-    852, 665,  74, 876, 790,  60, 246, 405, 549, 123, 938, 227, 829, 888, 438,
-    353, 992, 158, 685, 843,  58, 288, 914, 289, 687, 246, 392, 443, 748,  66,
-    652, 328,  47,  77, 375, 617, 468, 339, 429, 778, 141, 326, 240, 780, 400,
-    951, 212,   4, 185, 671, 127, 305, 324], dtype='int32')
+    10,  11,  53,  54,  61,  62,  68,  69,  96, 149, 150, 151, 181, 193, 194,
+    195, 226, 234, 291, 318, 336, 352, 362, 427, 428, 498, 499, 502, 513, 532,
+    533, 555, 577, 628, 629, 658, 717, 718, 750, 789, 828, 848, 856, 869, 936,
+    937, 951, 973, 985, 989])
 
-#  data = get_data_matrix('sparse_coder/data/final/IMAGES.npy', l_patch=l_patch)
-
-#  data = np.random.randn(1000, l_patch ** 2)
+img_idx = img_idx[0:n_repeats]
 
 
-def normalize(x):
-    xmin, xmax = [getattr(x, func)(axis=(1, 2), keepdims=True) for func in
-                  ['min', 'max']]
-    u = x / np.maximum(-xmin, xmax)
-    return u * 0.5
 
-
-def normalize1(x)
-    return x / abs(x).max(axis=(1, 2), keepdims=True) * 0.5
+normalize = lambda x: x / abs(x).max(axis=(1, 2), keepdims=True) * 0.5
 
 data = normalize(data)
-
-
-
 N_imgs, L_I, L_I = data.shape
-#  L_I = int(np.sqrt(N_pix))  # Linear dimension of image
 
+
+def edge_filter():
+    def linear_filter(x, eps = 2 * 5./32):
+        return (abs(x) < (1 - eps)) * 1 + (abs(x) > (1 - eps)) * ((1-abs(x))/eps)
+    xx = np.arange(-1, 1.001, 2./31)
+    fx = fy = linear_filter(xx)
+    return np.outer(fx, fy)
+
+f = edge_filter()
 
 
 # PCA Basis (capturing 90 percent of the variance)
-D2 = get_pca_basis(data.reshape(n_imgs, -1), d_eff=d_eff * 2)
+D2 = get_pca_basis(data.reshape(n_imgs, -1), d_eff=d_eff)
 print D2.shape
 
 # Independent Pixel Prior
 D0 = np.eye((L_I ** 2))
 print D0.shape
 
-
-dc = 20.
-motion_gen = {'mode': 'Diffusion', 'dc': dc}
-motion_prior = {'mode': 'PositionDiffusion', 'dc': dc}
-
-#  img_idx = np.random.randint(0, N_imgs, size=n_repeats)
-#  stds = data.std(axis=1)
-#  pct = np.percentile(stds, 99)
-#  img_idx = np.where(stds > pct)[0]
-#  np.random.shuffle(img_idx)
-good_idx = [1, 2, 3, 4, 12, 13, 14, 16, 17, 18, 23, 24, 26, 28]
-img_idx = img_idx[good_idx]
-#  assert len(img_idx) > n_repeats
-img_idx = img_idx[5:n_repeats]
-
-
-for ds, (D, D_name, lamb) in product(
+for ds, (D, D_name, lamb), dc in product(
     [0.75],
-    #  zip([
-    #      #D2,
-    #       D1,
-    #       D0
-    #      ],
-    #      [#'PCA',
-    #       'Sparse',
-    #       'Indep'
-    #      ],
-    #      [#0.0,
-    #       0.01,
-    #       0.0
-    #      ])
-    #  zip([D0], ['Indep'], [0.0]),
-    zip([D2], ['PCA'], [0.0])
+    [
+        [D1, 'Sparse', 0.01],
+        [D1, 'Sparse', 0.02],
+        [D1, 'Sparse', 0.005],
+        [D0, 'Indep', 0.0],
+        [D2, 'PCA', 0.0]
+    ],
+    [20., 40., 100.]
 ):
     l_n = int(l_patch * ds / np.sqrt(2) +
            0.25 * 2 * np.sqrt(dc * n_t * 0.001))
+
+    motion_gen = {'mode': 'Diffusion', 'dc': dc}
+    motion_prior = {'mode': 'PositionDiffusion', 'dc': dc}
 
     for u in img_idx:
         emb = EMBurak(
@@ -152,7 +123,7 @@ for ds, (D, D_name, lamb) in product(
             s_range='sym'
         )
 
-        XR, YR, R = emb.gen_data(data[u])
+        XR, YR, R = emb.gen_data(data[u] * f)
         emb.data['D_name'] = D_name
         emb.run_em(R)
         emb.save()

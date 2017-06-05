@@ -92,7 +92,7 @@ class SparseCoder(object):
     """
 
     def __init__(self, data, n_sp, n_bat, alpha, d_scale=1., pos_only=False,
-                 sparsify=False):
+                 sparsify_dictionary=False):
         """
 
         Parameters
@@ -107,7 +107,7 @@ class SparseCoder(object):
             Sparsity coefficient
         pos_only : bool
             True if we do positive only learning
-        sparsify: bool
+        sparsify_dictionary: bool
             If True, generate a mask to sparsify the dictionary during
             learning.
         """
@@ -115,10 +115,16 @@ class SparseCoder(object):
         self.n_imgs = data.shape[0]
         self.n_bat = n_bat
         self.d_scale = d_scale
-        self.sparsify = sparsify
-        self.tc = TheanoBackend(data=data, alpha=alpha, d_scale=d_scale,
-                                pos_only=pos_only, n_bat=n_bat, n_sp=n_sp,
-                                sparsify=sparsify)
+        self.sparsify = sparsify_dictionary
+        self.tc = TheanoBackend(
+            data=data,
+            alpha=alpha,
+            d_scale=d_scale,
+            pos_only=pos_only,
+            n_bat=n_bat,
+            n_sp=n_sp,
+            sparsify=sparsify_dictionary
+        )
 
     def save(self, path):
         """
@@ -143,7 +149,7 @@ class SparseCoder(object):
             n_bat = d['n_bat']
         sparse_coder = cls(
             data, n_sp=d['n_sp'], n_bat=n_bat, alpha=d['alpha'],
-            d_scale=d['d_scale'], pos_only=d['pos_only'], sparsify=d['sparsify'])
+            d_scale=d['d_scale'], pos_only=d['pos_only'], sparsify_dictionary=d['sparsify'])
 
         sparse_coder.tc.t_D.set_value(d['D'])
         return sparse_coder

@@ -4,8 +4,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
-                colorbar=True, fig=None, ax=None, alpha=1.):
+def show_fields(
+    d,
+    cmap=plt.cm.gray,
+    m=None,
+    pos_only=False,
+    colorbar=True,
+    fig=None, ax=None,
+    alpha=1.,
+    normed=False
+):
     """
     Plot a collection of images.
 
@@ -23,6 +31,9 @@ def show_fields(d, cmap=plt.cm.gray, m=None, pos_only=False,
     n, n_pix = d.shape
     if m is None:
         m = int(np.sqrt(n - 0.01)) + 1
+
+    if normed:
+        d = d / abs(d).max(axis=1, keepdims=True)
 
     l = int(np.sqrt(n_pix))  # Linear dimension of the image
 
