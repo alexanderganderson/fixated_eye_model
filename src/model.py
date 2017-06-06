@@ -7,7 +7,6 @@ Main script.
 """
 
 import os
-import cPickle as pkl
 import numpy as np
 
 from utils.path_generator import (DiffusionPathGenerator,
@@ -17,8 +16,8 @@ from utils.time_filename import time_string
 from utils.BurakPoissonLP import PoissonLP
 from utils.hex_lattice import gen_hex_lattice
 from src.theano_backend import TheanoBackend
-from src.analyzer import snr
 from utils.h5py_utils import save_dict
+
 
 class EMBurak(object):
     """Produce spikes and infers the causes that generated those spikes."""
@@ -469,7 +468,7 @@ class EMBurak(object):
             desc = ''
             for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
                 desc += '    {:<6} |'.format(item)
-            desc += ' / Delta t | SNR'
+            desc += ' / Delta t'
             print desc
 
         fista_l = self.tc.calculate_L(
@@ -484,7 +483,7 @@ class EMBurak(object):
                     es0 = es
                 if v % 50 == 0:
                     des = [Ei - E0 for Ei, E0 in zip(es, es0)]
-                    print self.get_cost_string(des, tf - t0)  # + str(self.img_SNR)
+                    print self.get_cost_string(des, tf - t0)
 
         self.tc.update_HB(xr, yr, w)
         if self.print_mode:

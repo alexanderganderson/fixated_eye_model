@@ -3,7 +3,6 @@
 import numpy as np
 
 
-
 def gen_hex_lattice(w, a=1.):
     """
     Fill a circle centered at the origin with radius w
@@ -32,7 +31,6 @@ if __name__ == '__main__':
     for i in range(10):
         XE, YE = gen_hex_lattice(5.01, 0.5)
         print len(XE)
-
 
     plt.scatter(XE, YE)
     plt.axes().set_aspect('equal')

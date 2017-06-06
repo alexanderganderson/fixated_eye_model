@@ -1,7 +1,6 @@
 """Code to analyze the output of the simulations."""
 
 import numpy as np
-import cPickle as pkl
 import sys
 import os
 # from scipy.ndimage.filters import gaussian_filter
@@ -10,6 +9,7 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 from utils.h5py_utils import LazyDict
+
 
 def inner_product(p1, l1x, l1y,
                   p2, l2x, l2y, var):
@@ -35,6 +35,7 @@ def inner_product(p1, l1x, l1y,
 
     #  return np.einsum('i,j,ij->', p1, p2, coupling)
     return np.dot(p1, coupling).dot(p2)
+
 
 def snr(p1, l1x, l1y, p2, l2x, l2y, var):
     """
@@ -87,7 +88,6 @@ class DataAnalyzer:
         # Convert retinal positions to grid
         xs = self.data['XS'].astype('float32')
         ys = self.data['YS'].astype('float32')
-
 
         xs, ys = np.meshgrid(xs, ys)
         self.xs = xs.ravel()
@@ -289,7 +289,7 @@ class DataAnalyzer:
             self.image_ests[q] = res
 
         ax.set_title('Estimated Image, S = DA:\n SNR = %.2f'
-                  % self.snr_one_iteration(q))
+                     % self.snr_one_iteration(q))
         # FIXME: extent calculation could break in future
         a = self.data['ds'] * self.L_I / 2
 
@@ -310,8 +310,6 @@ class DataAnalyzer:
                 self.data['ds'] / np.sqrt(2), n=100)
         a = self.data['ds'] * self.L_I / 2
 
-        img = self.base_image
-        mm = abs(img).max()
         cax = _imshow(ax=ax, img=self.base_image, cmap=cmap,
                       mode=self.s_range,
                       extent=[-a - dx, a - dx, -a + dy, a + dy],
@@ -327,10 +325,9 @@ class DataAnalyzer:
             q = self.N_itr - 1
 
         n_time_steps = self.data['EM_data/{}/time_steps'.format(q)]
-        t_ms = self.DT * n_time_steps * 1000.
 
         if figsize is None:
-            figsize=(3.5, 5)
+            figsize = (3.5, 5)
         fig, ax = plt.subplots(nrows=3, ncols=2, figsize=figsize)
         #  fig.suptitle('EM Reconstruction after t = {} ms'.format(t_ms))
 
@@ -340,7 +337,8 @@ class DataAnalyzer:
 
         self.plot_image_estimate(fig, ax[0][1], q, cmap=plt.cm.gray_r)
 
-        self.plot_image_and_rfs(fig, ax=ax[0][0], legend=False, q=n_time_steps - 1)
+        self.plot_image_and_rfs(fig, ax=ax[0][0], legend=False,
+                                q=n_time_steps - 1)
         ax[0][0].set_title('Pattern with Cone RFs')
 
         self.plot_path_estimate(ax[2][0], q, 0)
@@ -358,10 +356,6 @@ class DataAnalyzer:
 
         for u in [0, 1]:
             ax[2][u].set_ylim(min(u0, u1), max(v0, v1))
-
-
-
-
 
         plt.tight_layout()
         #  plt.subplots_adjust(top=0.9)
@@ -419,7 +413,7 @@ class DataAnalyzer:
                 return 1.
 
         for x, y, i, s0 in zip(xe, ye, ie, s):
-            if i == ON  and mode == 'OFF':
+            if i == ON and mode == 'OFF':
                 continue
             if i == OFF and mode == 'ON':
                 continue
@@ -550,18 +544,14 @@ class DataAnalyzer:
             ax.imshow(np.zeros((1, 1)), cmap=cmap, vmin=-0.5, vmax=0.5,
                       extent=[-m, m, -m, m])
 
-
         self.plot_base_image(
             fig, ax, colorbar=False, alpha=1., cmap=cmap, dx=dx, dy=dy)
-
 
         _plot_rfs(
             ax, self.data['XE'], self.data['YE'], self.data['de'],
             legend, alpha=alpha_rf)
 
         ax.plot(-xr, yr, label='Eye path', c='g')
-
-
 
     def plot_moving_image_and_spikes(self, q):
         plt.figure(figsize=(12, 4))
@@ -587,9 +577,8 @@ def _imshow(ax, img, cmap, mode, extent=None, vmax=None, alpha=1.):
     else:
         vmin, vmax = vmin0 * vmax, vmax0 * vmax
 
-    return ax.imshow(img, cmap=cmap, interpolation='nearest',
-              extent=extent, vmin=vmin, vmax=vmax, alpha=alpha)
-
+    return ax.imshow(img, cmap=cmap, interpolation='nearest', extent=extent,
+                     vmin=vmin, vmax=vmax, alpha=alpha)
 
 
 def _plot_rfs(ax, xe, ye, de, legend, alpha=0.5):
@@ -612,14 +601,14 @@ def _plot_rfs(ax, xe, ye, de, legend, alpha=0.5):
             label = None  # 'One SDev of Neuron RF'
         else:
             label = None
-        ax.add_patch(plt.Circle((x, -y), r, color='red', fill=True, alpha=alpha,
-                                label=label))
-    #  plt.scatter(xe, ye, alpha=0.5, label='Neuron RF Centers, de={}'.format(de))
+        ax.add_patch(plt.Circle((x, -y), r, color='red', fill=True,
+                                alpha=alpha, label=label))
 
     if legend:
         plt.legend()
         ax.set_xlabel('x (arcmin)')
         ax.set_ylabel('y (arcmin)')
+
 
 def _get_sum_gaussian_image(s_gen, xs, ys, sdev, n=50):
     """

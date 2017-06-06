@@ -53,8 +53,7 @@ def show_fields(
         m0 = -mm
     m1 = mm
     cax = ax.imshow(out, cmap=cmap, interpolation='nearest', vmin=m0, vmax=m1,
-                   alpha=alpha)
+                    alpha=alpha)
     if colorbar:
         fig.colorbar(cax, ax=ax)
     ax.set_axis_off()
-

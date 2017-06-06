@@ -4,6 +4,7 @@ import os
 import numpy as np
 import h5py
 
+
 def save_dict(fn, d):
     """
     Save a dictionary using h5py.
@@ -20,7 +21,6 @@ def save_dict(fn, d):
     """
     with h5py.File(fn, 'w') as f:
         _save_dict(f, d)
-
 
 
 def _save_dict(f, d, base=''):
@@ -46,13 +46,13 @@ def _save_dict(f, d, base=''):
             raise ValueError('Unknown type for v: {}'.format(type(v)))
 
 
-
 def get_dict(fn, base=''):
     """
     Return a dictionary from the file starting at base.
     """
     with h5py.File(fn, 'r') as f:
         return _get_dict(f, base)
+
 
 def _get_dict(f, base):
     if base == '':
@@ -70,6 +70,7 @@ def _get_dict(f, base):
         else:
             raise ValueError('Unknown type for v: {}'.format(type(v)))
     return d
+
 
 class LazyDict(object):
     def __init__(self, fn):

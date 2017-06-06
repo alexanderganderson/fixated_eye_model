@@ -82,7 +82,7 @@ def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_SMIN, t_SMAX, t_DT):
 
     t_IEr = t_IE.dimshuffle('x', 0, 'x')
     t_Gen = t_IEr + (1 - 2 * t_IEr) * (
-        (t_G * t_Ips - t_SMIN) / (t_SMAX - t_SMIN)) # Generator signal
+        (t_G * t_Ips - t_SMIN) / (t_SMAX - t_SMIN))  # Generator signal
 
     t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
 
@@ -253,7 +253,7 @@ class TheanoBackend(object):
                 (self.l_i ** 2, -1))
             # i2i1 bjt
 
-            tmp2 = t_Dp.reshape((self.n_l, -1)) #k i2i1
+            tmp2 = t_Dp.reshape((self.n_l, -1))  # k i2i1
 
             tmp3 = T.dot(tmp2, tmp1)  # k bjt
             n_b, n_t = self.t_Wbt.shape
@@ -266,7 +266,6 @@ class TheanoBackend(object):
         #  self.sp_rf_test= theano.function(
         #      inputs=[self.t_XR, self.t_YR, self.t_Wbt],
         #      outputs=[t_SpRFCoupling, t_SpRFCoupling1])
-
 
         # Get RGC Sparse Coeff couplings
         # bkjt,bt-> kj
@@ -305,7 +304,7 @@ class TheanoBackend(object):
             t_dE_R_dAA : theano.tensor, shape (k, k')
             """
 
-            tmp = t_Wbt.dimshuffle(0, 'x', 1) * t_FP # b, j, t
+            tmp = t_Wbt.dimshuffle(0, 'x', 1) * t_FP  # b, j, t
             tmp1 = tmp.dimshuffle(0, 'x', 1, 2) * t_dlogFPdA
 
             return T.dot(
@@ -315,7 +314,7 @@ class TheanoBackend(object):
 
         t_dE_R_dAA = calc_hessian(self.t_Wbt, t_dlogFPdA, self.t_FP)
 
-        self.sp_rf_test= theano.function(
+        self.sp_rf_test = theano.function(
             inputs=[self.t_XR, self.t_YR, self.t_Wbt],
             outputs=[t_dE_R_dAA, t_dE_R_dAA1])
 
