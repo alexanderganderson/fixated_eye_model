@@ -271,7 +271,7 @@ class DataAnalyzer:
     #      plt.subplot(2, 2, 4)
     #      self.plot_velocity_estimate(q, 1)
 
-    def plot_image_estimate(self, fig, ax, q, cmap=plt.cm.gray,
+    def plot_image_estimate(self, fig, ax, q, cmap=plt.cm.gray_r,
                             colorbar=True, vmax=None):
         """Plot the estimated image after iteration q."""
         if q == -1:
@@ -573,7 +573,7 @@ def _imshow(ax, img, cmap, mode, extent=None, vmax=None, alpha=1.):
 
     if vmax is None:
         mm = abs(img).max()
-        vmin, vmax = -mm, mm
+        vmin, vmax = vmin0 * mm, vmax0 * mm
     else:
         vmin, vmax = vmin0 * vmax, vmax0 * vmax
 
