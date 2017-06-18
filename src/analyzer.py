@@ -501,10 +501,10 @@ class DataAnalyzer:
         plt.plot(x, y_on, label='ON')
         plt.plot(x, y_off, label='OFF')
         plt.plot(x, baseline_rate + 0 * x, '--')
-        plt.xlabel('Stimulus intensity')
-        plt.ylabel('Firing Rate (Hz)')
+        #  plt.xlabel('Stimulus intensity')
+        #  plt.ylabel('Firing Rate (Hz)')
         #  plt.title('Firing rate as a function \n of Stimulus Intensity')
-        plt.legend()
+        #  plt.legend()
 
     def save_em_jpgs(self, output_dir, tag):
         """

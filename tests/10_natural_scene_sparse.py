@@ -88,10 +88,10 @@ print D0.shape
 for ds, (D, D_name, lamb), dc in product(
     [0.75],
     [
-        [D1, 'Sparse', 0.01],
-        [D1, 'Sparse', 0.02],
-        [D1, 'Sparse', 0.005],
-        [D0, 'Indep', 0.0],
+        #  [D1, 'Sparse', 0.01],
+        #  [D1, 'Sparse', 0.02],
+        #  [D1, 'Sparse', 0.005],
+        #  [D0, 'Indep', 0.0],
         [D2, 'PCA', 0.0]
     ],
     [20., 40., 100.]
