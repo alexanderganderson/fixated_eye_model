@@ -21,7 +21,7 @@ parser.add_argument('--n_repeats', type=int, default=5,
                     help='Number of repetitions for each set of parameters.')
 parser.add_argument('--n_t', type=int, default=100,
                     help='Number of timesteps')
-parser.add_argument('--output_dir', type=str, default='motion_benefit',
+parser.add_argument('--output_dir', type=str, default='motion_benefit_test',
                     help='Output_directory')
 parser.add_argument('--dc', type=float, default=20.,
                     help='Diffusion Constant for eye motion')
@@ -60,36 +60,67 @@ motion_info_ = [
     ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
      {'mode': 'PositionDiffusion', 'dc': 20.}),
     ({'mode': 'Diffusion', 'dc': 0.0001},
-     {'mode': 'PositionDiffusion', 'dc': 20.})
+     {'mode': 'PositionDiffusion', 'dc': 20.}),
 ]
 
-#  motion_info_ = motion_info_[1:2]
 #  motion_info_ = [
 #      ({'mode': 'Diffusion', 'dc': 0.001},
 #       {'mode': 'PositionDiffusion', 'dc': dc_infer})
 #      for dc_infer in [0.01, 0.4, 2., 20., 100.]]
+
+motion_info_ = [
+    ({'mode': 'Diffusion', 'dc': dc},
+     {'mode': 'PositionDiffusion', 'dc': dc})
+    for dc in [0.01, 0.4, 2., 8., 20., 40., 100.]]
 
 #  ds_ = [args.ds]
 #  ds_ = [0.32, 0.4, 0.6]
 ds_ = [0.40]
 de = 1.09
 
+#  drop_prob = 0.3
+drop_prob = None
+n_g_itr = 320
+#  n_g_itr = 100
+
 for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
-    emb = EMBurak(
-        ig.img, D, motion_gen, motion_prior, n_t=args.n_t, save_mode=True,
-        s_gen_name=ig.img_name, ds=ds, neuron_layout='hex', fista_c=0.8,
-        de=de, l_n=8.1, n_itr=n_itr, lamb=0.0, tau=1.28, n_g_itr=320,
-        output_dir_base=args.output_dir, print_mode=True)
+    for _ in range(args.n_repeats):
+        emb = EMBurak(
+            ig.img,
+            D,
+            motion_gen,
+            motion_prior,
+            n_t=args.n_t,
+            save_mode=True,
+            s_gen_name=ig.img_name,
+            ds=ds,
+            neuron_layout='hex',
+            drop_prob=drop_prob,
+            fista_c=0.8,
+            de=de,
+            l_n=8.1,
+            n_itr=n_itr,
+            n_g_itr=n_g_itr,
+            output_dir_base=args.output_dir,
+            print_mode=True,
+        )
+        XR, YR, R = emb.gen_data(ig.img)
+        emb.run_em(R)
+        emb.save()
+        emb.reset()
+
+    #  for _ in range(args.n_repeats):
+    #      XR, YR, R = emb.gen_data(ig.img)
+    #      emb.run_inference_no_motion(R)
+    #      emb.save()
+    #      emb.reset()
+
     #  for _ in range(args.n_repeats):
     #      XR, YR, R = emb.gen_data(ig.img)
     #      emb.run_inference_true_path(R, XR, YR)
     #      emb.save()
     #      emb.reset()
-    for _ in range(args.n_repeats):
-        XR, YR, R = emb.gen_data(ig.img)
-        emb.run_em(R)
-        emb.save()
-        emb.reset()
+
 
 # convert -set delay 30 -colorspace GRAY
 # -colors 256 -dispose 1 -loop 0 -scale 50% *.png alg_performance.gif

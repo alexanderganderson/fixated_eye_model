@@ -23,14 +23,35 @@ class EMBurak(object):
     """Produce spikes and infers the causes that generated those spikes."""
 
     def __init__(
-            self, s_gen, d, motion_gen, motion_prior,
-            dt=0.001, n_t=50, l_n=14, neuron_layout='sqr',
-            l0=10., l1=100.,
-            ds=1., de=1., lamb=0.,
-            tau=1.28, save_mode=False, n_itr=20, s_gen_name=' ',
-            output_dir_base='', n_g_itr=40, fista_c=0.8, n_p=20,
-            print_mode=True, gamma=10., s_range='pos',
-            save_pix_rf_coupling=False
+        self,
+        s_gen,
+        d,
+        motion_gen,
+        motion_prior,
+        dt=0.001,
+        n_t=50,
+        l_n=14,
+        neuron_layout='sqr',
+        drop_prob=None,
+        l0=10.,
+        l1=100.,
+        ds=1.,
+        de=1.,
+        lamb=0.,
+        tau=1.28,
+        save_mode=False,
+        n_itr=20,
+        s_gen_name=' ',
+        output_dir_base='',
+        n_g_itr=40,
+        fista_c=0.8,
+        n_p=20,
+        print_mode=True,
+        gamma=10.,
+        quad_reg=None,
+        quad_reg_mean=None,
+        s_range='pos',
+        save_pix_rf_coupling=False
     ):
         """
         Initialize the parts of the EM algorithm.
@@ -64,6 +85,8 @@ class EMBurak(object):
             Linear dimension of neuron array
         neuron_layout : str
             Either 'sqr' or 'hex' for a square or hexagonal grid
+        drop_prob : float
+            Probability of dropping out neurons from grid (None drops nothing)
         lamb: float
             Strength of sparse prior
         save_mode : bool
@@ -90,6 +113,8 @@ class EMBurak(object):
                 Initial velocity for Velocity Diffusion Model
         output_dir_base : str
             Files saved to 'output/output_dir_base' If none, uses a time string
+        quad_reg : array, shape (n_sp,)
+            Prior on sparse coefficients A_i^2 * quad_reg[i]
 
         Note that changing certain parameters without reinitializing the class
         may have unexpected effects (because the changes won't necessarily
@@ -108,6 +133,7 @@ class EMBurak(object):
             pos_only = False
         else:
             raise ValueError('Invalid s_range {}'.format(s_range))
+        self.s_range = s_range
 
         d = d.astype('float32')
 
@@ -128,6 +154,16 @@ class EMBurak(object):
         self.l_n = l_n  # Linear dimension of neuron receptive field grid
         self.n_l, n_pix = d.shape  # number of latent factors, image pixels
         self.l_i = s_gen.shape[0]  # Linear dimension of the image
+
+        if quad_reg is None:
+            quad_reg = np.zeros((self.n_l,)).astype('float32')
+        assert quad_reg.shape == (self.n_l,)
+        self.quad_reg = quad_reg
+
+        if quad_reg_mean is None:
+            quad_reg_mean = np.zeros((self.n_l,)).astype('float32')
+        assert quad_reg_mean.shape == (self.n_l,)
+        self.quad_reg_mean = quad_reg_mean
 
         if not self.l_i ** 2 == n_pix:
             raise ValueError('Mismatch between dictionary and image size')
@@ -151,17 +187,38 @@ class EMBurak(object):
 
         self.neuron_layout = neuron_layout
         (self.n_n, XE, YE, IE, XS, YS) = self.init_pix_rf_centers(
-            l_n, self.l_i, ds, de, mode=neuron_layout)
+            l_n, self.l_i, ds, de, mode=neuron_layout, drop_prob=drop_prob)
+
+        if drop_prob is None:
+            drop_prob = 0.
+        self.drop_prob = drop_prob
 
         # Variances of Gaussians for each pixel
         var = np.ones((self.l_i,)).astype('float32') * (
             (0.5 * ds) ** 2 + (0.203 * de) ** 2)
 
         self.tc = TheanoBackend(
-            XS, YS, XE, YE, IE, var,
-            d, self.l0, self.l1, self.dt, 1.,
-            self.gamma, self.lamb, self.tau, pos_only=pos_only,
-            SMIN=smin, SMAX=smax)
+            XS=XS,
+            YS=YS,
+            XE=XE,
+            YE=YE,
+            IE=IE,
+            Var=var,
+            d=d,
+            l0=self.l0,
+            l1=self.l1,
+            DT=self.dt,
+            G=1.,
+            GAMMA=self.gamma,
+            LAMBDA=self.lamb,
+            TAU=self.tau,
+            QUAD_REG=quad_reg,
+            QUAD_REG_MEAN=quad_reg_mean,
+            pos_only=pos_only,
+            SMIN=smin,
+            SMAX=smax
+        )
+
         self.set_gain_factor(s_gen.shape)
 
         if motion_gen['mode'] == 'Diffusion':
@@ -226,7 +283,7 @@ class EMBurak(object):
         return xr, yr, r
 
     @staticmethod
-    def init_pix_rf_centers(l_n, l_i, ds, de, mode='sqr'):
+    def init_pix_rf_centers(l_n, l_i, ds, de, mode='sqr', drop_prob=None):
         """
         Initialize the centers of the receptive fields of the neurons.
 
@@ -242,6 +299,8 @@ class EMBurak(object):
             Spacing between neurons
         mode : str
             Generate neuron array either a square grid or a hexagonal grid
+        drop_prob : float
+            Probability of dropping out a neuron (if None, drop nothing)
 
         Returns
         -------
@@ -271,6 +330,11 @@ class EMBurak(object):
         else:
             raise ValueError('Unrecognized Neuron Mode {}'.format(mode))
         xe, ye = xe.astype('float32'), ye.astype('float32')
+
+        if drop_prob is not None:
+            idx = np.where(
+                np.random.binomial(n=1, p=drop_prob, size=xe.size) == 0)
+            xe, ye = xe[idx], ye[idx]
 
         xe = np.concatenate((xe, xe))
         ye = np.concatenate((ye, ye))
@@ -466,7 +530,8 @@ class EMBurak(object):
 
         if self.print_mode:
             desc = ''
-            for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp']:
+            for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp',
+                         'E_quad']:
                 desc += '    {:<6} |'.format(item)
             desc += ' / Delta t'
             print desc
@@ -523,6 +588,9 @@ class EMBurak(object):
         self.tc.reset()
         self.pf.Y = r.T
         em_data = {}
+        if self.print_mode:
+            print 'The hessian trace is {}'.format(
+                np.trace(self.tc.t_H.get_value()))
 
         print 'Running full EM'
 
@@ -535,10 +603,12 @@ class EMBurak(object):
             self.run_m(t0, tf, r, n_g_itr=self.n_g_itr)
 
             iteration_data = {
-                'time_steps': tf, 'path_means': self.pf.means,
+                'time_steps': tf,
+                'path_means': self.pf.means,
                 'path_sdevs': self.pf.sdevs,
                 'image_est': self.tc.image_est(),
-                'coeff_est': self.tc.get_A()}
+                'coeff_est': self.tc.get_A()
+            }
 
             if self.save_pix_rf_coupling:
                 xr = self.pf.XS[t0:tf, :, 0].transpose()
@@ -549,6 +619,53 @@ class EMBurak(object):
 
             em_data[u] = iteration_data
         em_data['mode'] = 'EM'
+
+        if self.save_mode:
+            self.data['EM_data'] = em_data
+
+    def run_inference_no_motion(self, r, rho=0.8, eps=0.01):
+        """
+        Run inference for pattern assuming no motion.
+
+        Parameters
+        ----------
+        r : array, shape (n_n, n_t)
+            Spikes
+
+        """
+        em_data = {}
+        n_n, n_t = r.shape
+        print('Running Inference assuming No Motion')
+        print('E_no_mo')
+
+        for u in range(self.n_itr):
+            #  t0 = self.n_t * u / self.n_itr
+            tf = self.n_t * (u + 1) / self.n_itr
+
+            xr = yr = np.zeros((1, 1), dtype='float32')
+            r_av = np.mean(r[:, 0:tf], axis=1, keepdims=True).astype('float32')
+
+            print('Iteration: {} | Running up to time {}'.format(u, tf))
+            self.tc.reset_adadelta_variables()
+            for v in range(self.n_g_itr):
+                es = self.tc.run_image_max_step(xr, yr, r_av, rho, eps)
+                if self.print_mode:
+                    if v == 0:
+                        es0 = es
+                    if v % 20 == 0:
+                        des = [Ei - E0 for Ei, E0 in zip(es, es0)]
+                        print self.get_cost_string(des, 1)
+
+            iteration_data = {
+                'time_steps': n_t,
+                #  'path_means': self.pf.means,
+                #  'path_sdevs': self.pf.sdevs,
+                'image_est': self.tc.image_est(),
+                'coeff_est': self.tc.get_A()
+            }
+
+            em_data[str(u)] = iteration_data
+        em_data['mode'] = 'NoMotion'
 
         if self.save_mode:
             self.data['EM_data'] = em_data
@@ -619,36 +736,44 @@ class EMBurak(object):
         """
         # Note it is important to create a new dictionary here so that
         # we reset the data dict after generating new data
-        self.data = {'DT': self.dt,
-                     'motion_prior': self.motion_prior,
-                     'motion_gen': self.motion_gen,
-                     'ds': self.ds,
-                     'de': self.de,
-                     'L0': self.l0,
-                     'L1': self.l1,
-                     'GAMMA': self.gamma,
-                     'lamb': self.lamb,
-                     'fista_c': self.fista_c,
-                     'D': self.tc.t_D.get_value(),
-                     'N_L': self.n_l,
-                     'N_T': self.n_t,
-                     'L_I': self.l_i,
-                     'L_N': self.l_n,
-                     'N_g_itr': self.n_g_itr,
-                     'N_itr': self.n_itr,
-                     'N_P': self.n_p,
-                     'XS': self.tc.t_XS.get_value(),
-                     'YS': self.tc.t_YS.get_value(),
-                     'XE': self.tc.t_XE.get_value(),
-                     'YE': self.tc.t_YE.get_value(),
-                     'Var': self.tc.t_Var.get_value(),
-                     'G': self.tc.t_G.get_value(),
-                     'tau': self.tau,
-                     'XR': xr, 'YR': yr,
-                     'IE': self.tc.t_IE.get_value(),
-                     'S_gen': s_gen, 'S_gen_name': self.s_gen_name,
-                     'R': r,
-                     'Ips': self.Ips, 'FP': self.FP}
+        self.data = {
+            'DT': self.dt,
+            'motion_prior': self.motion_prior,
+            'motion_gen': self.motion_gen,
+            'ds': self.ds,
+            'de': self.de,
+            'L0': self.l0,
+            'L1': self.l1,
+            'GAMMA': self.gamma,
+            'lamb': self.lamb,
+            'fista_c': self.fista_c,
+            'D': self.tc.t_D.get_value(),
+            'N_L': self.n_l,
+            'N_T': self.n_t,
+            'L_I': self.l_i,
+            'L_N': self.l_n,
+            'N_g_itr': self.n_g_itr,
+            'N_itr': self.n_itr,
+            'N_P': self.n_p,
+            'XS': self.tc.t_XS.get_value(),
+            'YS': self.tc.t_YS.get_value(),
+            'XE': self.tc.t_XE.get_value(),
+            'YE': self.tc.t_YE.get_value(),
+            'Var': self.tc.t_Var.get_value(),
+            'G': self.tc.t_G.get_value(),
+            'tau': self.tau,
+            'XR': xr, 'YR': yr,
+            'IE': self.tc.t_IE.get_value(),
+            'S_gen': s_gen,
+            'S_gen_name': self.s_gen_name,
+            'R': r,
+            'Ips': self.Ips,
+            'FP': self.FP,
+            'quad_reg': self.quad_reg,
+            'quad_reg_mean': self.quad_reg_mean,
+            'drop_prob': self.drop_prob,
+            's_range': self.s_range,
+        }
 
     def save(self, compute_snrs=True):
         """

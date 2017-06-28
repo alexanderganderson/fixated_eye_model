@@ -4,6 +4,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 from sparse_coder.fista import fista_updates
+from utils.theano_gradient_routines import ada_delta
 
 
 def reset_shared_var(t_S):
@@ -83,10 +84,7 @@ def firing_prob(t_Ips, t_G, t_IE, t_L0, t_L1, t_SMIN, t_SMAX, t_DT):
     t_IEr = t_IE.dimshuffle('x', 0, 'x')
     t_Gen = t_IEr + (1 - 2 * t_IEr) * (
         (t_G * t_Ips - t_SMIN) / (t_SMAX - t_SMIN))  # Generator signal
-
-    t_FP_0 = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
-
-    t_FP = t_FP_0
+    t_FP = t_DT * T.exp(T.log(t_L0) + T.log(t_L1 / t_L0) * t_Gen)
     return t_FP
 
 
@@ -100,10 +98,8 @@ def dlogfp_dA(t_dIpsdA, t_G, t_IE, t_L0, t_L1, t_SMIN, t_SMAX):
 
     """
     t_IEr = t_IE.dimshuffle('x', 'x', 0, 'x')
-    # t_dGen_dA = t_IEr + (1 - 2 * t_IEr) * t_G * t_dIpsdA
     t_dGen_dA = (1 - 2 * t_IEr) * t_G * t_dIpsdA / (t_SMAX - t_SMIN)
     t_dlogFPdA = T.log(t_L1 / t_L0) * t_dGen_dA
-
     return t_dlogFPdA
 
 
@@ -131,9 +127,28 @@ class TheanoBackend(object):
     Theano backend for executing the computations
     """
 
-    def __init__(self, XS, YS, XE, YE, IE, Var, d,
-                 l0, l1, DT, G, GAMMA, LAMBDA, TAU, pos_only=True,
-                 SMIN=0., SMAX=1.):
+    def __init__(
+        self,
+        XS,
+        YS,
+        XE,
+        YE,
+        IE,
+        Var,
+        d,
+        l0,
+        l1,
+        DT,
+        G,
+        GAMMA,
+        LAMBDA,
+        TAU,
+        QUAD_REG,
+        QUAD_REG_MEAN,
+        pos_only=True,
+        SMIN=0.,
+        SMAX=1.
+    ):
         """
         Initializes all theano variables and functions
         """
@@ -151,7 +166,6 @@ class TheanoBackend(object):
 
         self.t_XR = T.matrix('XR')
         self.t_YR = T.matrix('YR')
-        self.t_R = T.matrix('R')
 
         #  Parameters
         self.t_L0 = theano.shared(np.float32(l0), 'L0')
@@ -193,7 +207,7 @@ class TheanoBackend(object):
         # Latent Variable Estimation #
         ##############################
 
-        #  self.spiking_cost = spiking_cost
+        self.t_R = T.matrix('R')
 
         # Current value of A
         self.t_A = theano.shared(
@@ -216,6 +230,9 @@ class TheanoBackend(object):
 
         self.t_GAMMA = theano.shared(np.float32(GAMMA), 'GAMMA')
         self.t_LAMBDA = theano.shared(np.float32(LAMBDA), 'LAMBDA')
+        self.t_QUAD_REG = theano.shared(np.float32(QUAD_REG), 'QUAD_REG')
+        self.t_QUAD_REG_MEAN = theano.shared(
+            np.float32(QUAD_REG_MEAN), 'QUAD_REG_MEAN')
 
         # Calculate Firing rate
         self.t_S = T.dot(self.t_A, self.t_D).reshape((self.l_i, self.l_i))
@@ -339,6 +356,10 @@ class TheanoBackend(object):
         self.t_E_sp = self.t_LAMBDA * T.sum(T.abs_(self.t_A))
         self.t_E_sp.name = 'E_sp'
 
+        #  self.t_E_quad = 0.5 * T.sum(self.t_QUAD_REG *
+        #                              ((self.t_A - self.t_QUAD_REG_MEAN) ** 2))
+        #  self.t_E_quad.name = 'E_quad'
+
         # Define bias term
         t_dPrior = T.grad(self.t_E_sp, self.t_A)
 
@@ -351,8 +372,11 @@ class TheanoBackend(object):
         self.t_E_lin_prior = ((self.t_A - self.t_Ap) * self.t_B).sum()
 
         # Split off terms that will go into fista (i.e. not icluding E_sp)
-        self.t_E_rec = (self.t_E_prev + self.t_E_R +
-                        self.t_E_lin_prior + self.t_E_bound)
+        self.t_E_rec = (
+            self.t_E_prev + self.t_E_R +
+            self.t_E_lin_prior + self.t_E_bound
+            #  + self.t_E_quad
+        )
         self.t_E_rec.name = 'E_rec'
 
         self.t_E = self.t_E_rec + self.t_E_sp
@@ -372,7 +396,9 @@ class TheanoBackend(object):
             self.t_E_R,
             self.t_E_bound,
             self.t_E_sp,
-            self.t_E_lin_prior]
+            self.t_E_lin_prior,
+            #  self.t_E_quad,
+        ]
 
         self.costs = theano.function(
             inputs=[self.t_XR, self.t_YR, self.t_R, self.t_Wbt],
@@ -418,12 +444,43 @@ class TheanoBackend(object):
                 (self.t_H, t_decay * self.t_H + t_dE_R_dAA),
                 (self.t_B, t_dPrior)])
 
+        # Code for no motion optimizer
+        self.t_E_R_no_mo = T.sum(spiking_cost(self.t_R, self.t_FP))
+        self.t_E_R_no_mo.name = 'E_R_no_mo'
+
+        t_E_no_mo = self.t_E_R_no_mo + self.t_E_bound
+        t_E_no_mo.name = 'E_no_mo'
+
+        t_Rho = T.scalar('Rho')
+        t_Eps = T.scalar('Eps')
+        ada_updates = ada_delta(t_E_no_mo, self.t_A, *(t_Rho, t_Eps))
+        t_ada_Eg2, t_ada_dA2, _ = ada_updates.keys()
+
+        def reset_adadelta_variables(t_A=self.t_A):
+            """
+            Resets ADA Delta auxillary variables
+            """
+            A0 = np.zeros_like(t_A.get_value()).astype(theano.config.floatX)
+            t_ada_Eg2.set_value(A0)
+            t_ada_dA2.set_value(A0)
+            t_A.set_value(A0)
+
+        self.reset_adadelta_variables = reset_adadelta_variables
+
+        self.run_image_max_step = theano.function(
+            inputs=[self.t_XR, self.t_YR, self.t_R, t_Rho, t_Eps],
+            updates=ada_updates,
+            outputs=[t_E_no_mo]
+        )
+
     def reset_hessian_and_bias(self):
         """
         Reset the values of the hessian term and the bias term to
             zero to reset the
         """
-        reset_shared_var(self.t_H)
+        #  reset_shared_var(self.t_H)
+        self.t_H.set_value(np.diag(self.t_QUAD_REG.get_value()))
+
         reset_shared_var(self.t_B)
 
     def set_gain_factor(self, g):
@@ -439,12 +496,14 @@ class TheanoBackend(object):
         self.reset_image_estimate()
         self.init_m_aux()
         self.reset_hessian_and_bias()
+        self.reset_adadelta_variables()
 
     def reset_image_estimate(self):
         """
         Resets the value of the image as stored on the GPU
         """
-        reset_shared_var(self.t_A)
+        #  reset_shared_var(self.t_A)
+        self.t_A.set_value(self.t_QUAD_REG_MEAN.get_value())
         reset_shared_var(self.t_Ap)
 
     def calculate_L(self, n_t, n_n, l0, l1, dt, ctant):
@@ -468,8 +527,11 @@ class TheanoBackend(object):
             constant to loosen our bound
         """
         d_scl = np.sqrt((self.t_D.get_value() ** 2).sum(1).mean())
-        return (n_t * n_n * l1 * dt * d_scl ** 2 *
-                np.log(l1 / l0) ** 2 * ctant).astype('float32')
+
+        a = n_t * n_n * l1 * dt * d_scl ** 2 * np.log(l1 / l0) ** 2
+        b = 0.5 * self.t_QUAD_REG.get_value().max()
+        #  print a, b, b / a
+        return ((a + b) * ctant).astype('float32')
 
     def init_m_aux(self):
         """

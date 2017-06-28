@@ -40,6 +40,25 @@ def get_effective_dimensionality(data, var_thresh=0.9):
     d_eff = np.argmax(cs > cs[-1] * var_thresh) # Effective Dim of data
     return d_eff
 
+def _get_pca(data):
+    """
+    Parameters
+    ----------
+    data : array, shape (n_images, n_features)
+        Data to be analyzed.
+
+    Returns
+    -------
+    evals : array, shape (n_features,)
+        Variance associated with each component.
+    evecs : array, shape (n_features, n_features)
+        PCA components as evecs[:, i]
+    """
+
+    IM_cov = np.cov(data.T)
+    evals, evecs = eigh(IM_cov)
+    return evals, evecs
+
 
 def get_pca_basis(data, var_thresh=0.9, d_eff=None):
     """

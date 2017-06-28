@@ -95,7 +95,10 @@ class DataAnalyzer:
 
         self.N_itr = self.data['N_itr']
 
-        self.s_range = 'sym'  # 'pos'
+        try:
+            self.s_range = self.data['s_range']
+        except:
+            self.s_range = 'sym'  # 'pos'
 
         # Dictionary to store image estimates (high res)
         self.image_ests = {}
@@ -658,7 +661,8 @@ def pf_plot(pf, t):
     plt.scatter(xx, yy, s=ww * 5000)
 
 
-def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.):
+def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.,
+                      alpha=0.5):
     """
     Create a plot of the data +/- k standard deviations.
 
@@ -673,9 +677,10 @@ def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.):
     """
     mm = data.mean(0)
     sd = data.std(0) * k
-    ax.fill_between(t, mm - sd, mm + sd, alpha=0.5, color=c,
-                    hatch=hatch)
-    ax.plot(t, mm, color=c, label=label)
+    p = ax.plot(t, mm, color=c, label=label)
+    c = p[-1].get_color()
+    p = ax.fill_between(t, mm - sd, mm + sd, alpha=alpha, color=c,
+                        hatch=hatch)
 
 
 if __name__ == '__main__':
