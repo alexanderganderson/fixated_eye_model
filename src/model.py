@@ -24,7 +24,7 @@ class EMBurak(object):
 
     def __init__(
         self,
-        s_gen,
+        l_i,
         d,
         motion_gen,
         motion_prior,
@@ -65,8 +65,8 @@ class EMBurak(object):
 
         Parameters
         ----------
-        s_gen : array, float32, shape (l_i, l_i), entries in [0, 1]
-            Image that generates the spikes
+        l_i: int
+            Length of pattern in pixels.
         d : array, float32, shape (n_l, n_pix)
             Dictionary used to infer latent factors
         s_gen_name : str
@@ -137,7 +137,6 @@ class EMBurak(object):
 
         d = d.astype('float32')
 
-        #  s_gen = s_gen.astype('float32')
         # Assumes that the first dimension is 'Y'
         #    and the second dimension is 'X'
         self.s_gen_name = s_gen_name
@@ -153,7 +152,7 @@ class EMBurak(object):
         self.n_t = n_t  # Number of time steps
         self.l_n = l_n  # Linear dimension of neuron receptive field grid
         self.n_l, n_pix = d.shape  # number of latent factors, image pixels
-        self.l_i = s_gen.shape[0]  # Linear dimension of the image
+        self.l_i = l_i  # Linear dimension of the image
 
         if quad_reg is None:
             quad_reg = np.zeros((self.n_l,)).astype('float32')
