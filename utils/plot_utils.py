@@ -39,3 +39,17 @@ def equalize_y_axes(ax0, ax1):
     for ax in [ax0, ax1]:
         ax.set_ylim(u, v)
 
+
+def expand_legend_linewidths(ax, lw=3, **kwargs):
+    # obtain the handles and labels from the figure
+    handles, labels = ax.get_legend_handles_labels()
+    # copy the handles
+    import copy
+    handles = [copy.copy(ha) for ha in handles]
+    # set the linewidths to the copies
+    [ha.set_linewidth(lw) for ha in handles]
+    # put the copies into the legend
+    leg = ax.legend(
+        handles=handles, labels=labels,
+        **kwargs)
+    return leg

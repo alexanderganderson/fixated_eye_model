@@ -230,7 +230,8 @@ class TheanoBackend(object):
 
         self.t_GAMMA = theano.shared(np.float32(GAMMA), 'GAMMA')
         self.t_LAMBDA = theano.shared(np.float32(LAMBDA), 'LAMBDA')
-        self.t_QUAD_REG = theano.shared(np.float32(QUAD_REG), 'QUAD_REG')
+        self.QUAD_REG = QUAD_REG.astype('float32')
+        #  self.t_QUAD_REG = theano.shared(np.float32(QUAD_REG), 'QUAD_REG')
         self.t_QUAD_REG_MEAN = theano.shared(
             np.float32(QUAD_REG_MEAN), 'QUAD_REG_MEAN')
 
@@ -265,7 +266,7 @@ class TheanoBackend(object):
             k i2 i1
             b k j t
             """
-
+            n_n = t_PixRFCoupling.shape[3]
             tmp1 = t_PixRFCoupling.dimshuffle(1, 2, 0, 3, 4).reshape(
                 (self.l_i ** 2, -1))
             # i2i1 bjt
@@ -275,7 +276,7 @@ class TheanoBackend(object):
             tmp3 = T.dot(tmp2, tmp1)  # k bjt
             n_b, n_t = self.t_Wbt.shape
             return tmp3.reshape(
-                (self.n_l, n_b, self.n_n, n_t)).dimshuffle(
+                (self.n_l, n_b, n_n, n_t)).dimshuffle(
                     1, 0, 2, 3)
 
         t_SpRFCoupling = pix_rf_to_sp_rf(t_PixRFCoupling, t_Dp)
@@ -479,7 +480,13 @@ class TheanoBackend(object):
             zero to reset the
         """
         #  reset_shared_var(self.t_H)
-        self.t_H.set_value(np.diag(self.t_QUAD_REG.get_value()))
+        t = self.QUAD_REG
+        if len(t.shape) == 1:
+            self.t_H.set_value(np.diag(self.QUAD_REG))
+        elif len(t.shape) == 2:
+            self.t_H.set_value(self.QUAD_REG)
+        else:
+            raise ValueError('Invalid quad_reg shape')
 
         reset_shared_var(self.t_B)
 
@@ -529,7 +536,17 @@ class TheanoBackend(object):
         d_scl = np.sqrt((self.t_D.get_value() ** 2).sum(1).mean())
 
         a = n_t * n_n * l1 * dt * d_scl ** 2 * np.log(l1 / l0) ** 2
-        b = 0.5 * self.t_QUAD_REG.get_value().max()
+        #  try:
+        #      self._b
+        #  except:
+        #      from scipy.linalg import eigh as largest_eigh
+        #      k=1
+        #      N = inv_cov.shape[0]
+        #      evals_large, _ = largest_eigh(inv_cov, eigvals=(N-k,N-1))
+        b = 0.5 * self.QUAD_REG.max()
+        # FIXME: not quite right for non-diagonal matrix, but is close enough
+        # in practice
+
         #  print a, b, b / a
         return ((a + b) * ctant).astype('float32')
 

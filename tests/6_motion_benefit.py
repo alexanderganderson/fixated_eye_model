@@ -19,19 +19,14 @@ from src.model import EMBurak
 from utils.image_gen import ImageGenerator
 
 parser = ArgumentParser('Test the motion benefit')
-parser.add_argument('--n_repeats', type=int, default=5,
+parser.add_argument('--n_repeats', type=int, default=20,
                     help='Number of repetitions for each set of parameters.')
-parser.add_argument('--n_t', type=int, default=600,
+parser.add_argument('--n_t', type=int, default=700,
                     help='Number of timesteps')
 parser.add_argument('--output_dir', type=str, default='motion_benefit_test',
                     help='Output_directory')
-#  parser.add_argument('--dc', type=float, default=20.,
-#                      help='Diffusion Constant for eye motion')
 parser.add_argument('--image', type=str, default='e',
                     help='Digit type')
-#  parser.add_argument('--ds', type=float, default=0.4,
-#                      help='Pixel Spacing')
-
 parser.add_argument('--experiment', type=str, default='motion_benefit',
                     help='Tag to determine type of experiment to run')
 
@@ -63,37 +58,68 @@ else:
 if args.experiment == 'motion_benefit':
     # Main experiment concerning motion benefit using motion and no motion
     motion_info_ = [
-        #  ({'mode': 'Diffusion', 'dc': args.dc},
-        #   {'mode': 'PositionDiffusion', 'dc': args.dc}),
         ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
          {'mode': 'PositionDiffusion', 'dc': 20.}),
         ({'mode': 'Diffusion', 'dc': 0.0001},
          {'mode': 'PositionDiffusion', 'dc': 20.}),
     ]
     drop_prob = None
+    run_em = True
+    run_nom = True
+elif args.experiment == 'motion_benefit_drop':
+    # Motion benefit after dropping out cones
+    motion_info_ = [
+        ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+         {'mode': 'PositionDiffusion', 'dc': 20.}),
+        ({'mode': 'Diffusion', 'dc': 0.0001},
+         {'mode': 'PositionDiffusion', 'dc': 20.}),
+    ]
+    drop_prob_ = [0.3]
+    run_em = True
+    run_nom = False
 elif args.experiment == 'no_motion_best_dc_infer':
+    # Sweep over diffusion constants to find best amount of motion for each
+    # amount of cone drop out
     motion_info_ = [
         ({'mode': 'Diffusion', 'dc': 0.001},
          {'mode': 'PositionDiffusion', 'dc': dc_infer})
         for dc_infer in [0.01, 0.4, 2., 20., 100.]]
-    drop_prob = None
-elif args.experiment == '':
+    drop_prob_ = [None]
+    run_em = True
+    run_nom = False
+elif args.experiment == 'best_dc_cone_drop':
     motion_info_ = [
-        ({'mode': 'Diffusion', 'dc': dc},
-         {'mode': 'PositionDiffusion', 'dc': dc})
-        for dc in [0.01, 0.4, 2., 8., 20., 40., 100.]
+        ({'mode': 'Diffusion', 'dc': dc_gen},
+         {'mode': 'PositionDiffusion', 'dc': dc_infer})
+        for dc_gen, dc_infer in [
+            [0.01, 0.01],
+            [0.01,   2.],
+            [0.01,  10.],
+            [0.4, 0.4],
+            [0.4, 4.],
+            [0.4, 20.],
+            [2., 2.],
+            [2., 10.],
+            [2., 20,],
+            [8., 8.],
+            [8., 20.],
+            [20., 20.],
+            [40., 40.],
+            [100., 100.],
+        ]
     ]
-    drop_prob = 0.3
+
+    drop_prob_ = [0.0, 0.3, 0.5]
+    run_em = True
+    run_nom = False
 else:
     raise ValueError('Invalid experiment name')
 
-#  ds_ = [args.ds]
-#  ds_ = [0.32, 0.4, 0.6]
 ds_ = [0.40]
 de = 1.09
 
-
-for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
+for (motion_gen, motion_prior), ds, drop_prob in product(
+    motion_info_, ds_, drop_prob_):
     emb = EMBurak(
         l_i=L_I,
         d=D,
@@ -108,23 +134,25 @@ for (motion_gen, motion_prior), ds in product(motion_info_, ds_):
         de=de,
         l_n=8.1,
         n_itr=n_itr,
-        n_g_itr=n_g_itr,
+        n_g_itr=None,
         output_dir_base=args.output_dir,
     )
 
-    for _ in range(args.n_repeats):
+    if run_em:
         emb.n_g_itr = 320
-        XR, YR, R = emb.gen_data(ig.img)
-        emb.run_em(R)
-        emb.save()
-        emb.reset()
+        for _ in range(args.n_repeats):
+            XR, YR, R = emb.gen_data(ig.img)
+            emb.run_em(R)
+            emb.save()
+            emb.reset()
 
-    for _ in range(args.n_repeats):
+    if run_nom:
         emb.n_g_itr = 100
-        XR, YR, R = emb.gen_data(ig.img)
-        emb.run_inference_no_motion(R)
-        emb.save()
-        emb.reset()
+        for _ in range(args.n_repeats):
+            XR, YR, R = emb.gen_data(ig.img)
+            emb.run_inference_no_motion(R)
+            emb.save()
+            emb.reset()
 
     #  for _ in range(args.n_repeats):
     #      XR, YR, R = emb.gen_data(ig.img)

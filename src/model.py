@@ -156,7 +156,7 @@ class EMBurak(object):
 
         if quad_reg is None:
             quad_reg = np.zeros((self.n_l,)).astype('float32')
-        assert quad_reg.shape == (self.n_l,)
+        #  assert quad_reg.shape == (self.n_l,)
         self.quad_reg = quad_reg
 
         if quad_reg_mean is None:
@@ -218,7 +218,7 @@ class EMBurak(object):
             SMAX=smax
         )
 
-        self.set_gain_factor(s_gen.shape)
+        self.set_gain_factor((l_i, l_i))
 
         if motion_gen['mode'] == 'Diffusion':
             self.pg = DiffusionPathGenerator(
@@ -529,8 +529,7 @@ class EMBurak(object):
 
         if self.print_mode:
             desc = ''
-            for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp',
-                         'E_quad']:
+            for item in ['E', 'E_prev', 'E_R', 'E_bnd', 'E_sp', 'E_lp',]:
                 desc += '    {:<6} |'.format(item)
             desc += ' / Delta t'
             print desc

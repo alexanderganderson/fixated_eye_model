@@ -24,9 +24,9 @@ if False:
     output_dir = 'test'
 else:
     n_t = 600
-    n_repeats = 3
+    n_repeats = 15
     n_g_itr = 320
-    output_dir = 'natural_sparsity_van_hateren_pca2'
+    output_dir = 'natural_sparsity_van_hateren_sp_quad_reg'
 
 n_itr = n_t / 5
 l_patch = 32
@@ -41,8 +41,14 @@ path = ('sparse_coder/output/'
 with open(path, 'r') as f:
     out = pkl.load(f)
     D1 = out['D']
-    print 'Sparse Coding dictionary shape: ' + str(D1.shape)
+    print 'Sparse Coding dictionary Shape: ' + str(D1.shape)
 #  d_eff = D1.shape[0] / over_comp
+
+stats_path = path[0:-4] + '_stats.pkl'
+with open(stats_path, 'r') as f:
+    out = pkl.load(f)
+    sp_quad_reg = out['inv_cov']
+    sp_quad_reg_mean = out['mean']
 
 # Load images
 
@@ -80,12 +86,12 @@ f = edge_filter()
 
 # PCA Basis
 evals, evecs = _get_pca(data.reshape(n_imgs, -1))
-quad_reg = evals[::-1] ** -1
+pca_quad_reg = evals[::-1] ** -1
 D2 = evecs.T[::-1]
-quad_reg = quad_reg[0:800]
+pca_quad_reg = pca_quad_reg[0:800]
 D2 = D2[0:800]
 
-quad_reg_mean = data.reshape(n_imgs, -1).dot(D2.T).mean(axis=0)
+pca_quad_reg_mean = data.reshape(n_imgs, -1).dot(D2.T).mean(axis=0)
 
 
 print 'PCA Dictionary Shape: ' + str(D2.shape)
@@ -98,20 +104,19 @@ print 'Independent Pixel Prior Dictionary Shape: ' + str(D0.shape)
 
 for ds, (D, D_name, lamb, quad_reg, quad_reg_mean), dc in product(
     [
+        #  0.5,
         0.75,
     ],
     [
+        [D1, 'Sparse', 0.005, sp_quad_reg, sp_quad_reg_mean],
         [D1, 'Sparse', 0.010, None, None],
+        [D1, 'Sparse', 0.000, sp_quad_reg, sp_quad_reg_mean],
+        [D2, 'PCA',    0.000, pca_quad_reg, pca_quad_reg_mean],
         [D1, 'Sparse', 0.000, None, None],
-        [D2, 'PCA',    0.000, quad_reg, quad_reg_mean],
         [D0, 'Indep',  0.000, None, None],
-        [D1, 'Sparse', 0.020, None, None],
-        [D1, 'Sparse', 0.005, None, None],
     ],
     [
         20.,
-        #  40.,
-        #  100.,
     ],
 ):
     l_n = int(l_patch * ds / np.sqrt(2) +
@@ -138,6 +143,7 @@ for ds, (D, D_name, lamb, quad_reg, quad_reg_mean), dc in product(
             tau=1.28,
             n_g_itr=n_g_itr,
             output_dir_base=output_dir,
+            drop_prob=None,
             s_range='sym',
             quad_reg=quad_reg,
             quad_reg_mean=quad_reg_mean,
