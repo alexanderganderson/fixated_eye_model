@@ -7,6 +7,8 @@ import os
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+from scipy.stats import sem
+from scipy.stats import t as studentt# Student-t
 
 from utils.h5py_utils import LazyDict
 
@@ -206,11 +208,11 @@ class DataAnalyzer:
         ax.fill_between(tt,
                         est_mean[:, d] - est_sdev[:, d],
                         est_mean[:, d] + est_sdev[:, d],
-                        alpha=0.5, linewidth=0.25)
+                        alpha=0.5, linewidth=0.25, color='r')
         ax.plot(tt,
-                est_mean[:, d], label='estimate')
+                est_mean[:, d], label='estimate', c='r')
         ax.plot(tt,
-                path, label='actual')
+                path, label='actual', c='b')
         ax.set_xlim([0, self.DT * self.N_T])
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Relative position (arcmin)')
@@ -661,7 +663,8 @@ def pf_plot(pf, t):
     plt.scatter(xx, yy, s=ww * 5000)
 
 
-def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.,
+def plot_fill_between(ax, t, data, label='', c=None, hatch=None,
+                      confidence_interval=False,
                       alpha=0.5):
     """
     Create a plot of the data +/- k standard deviations.
@@ -672,11 +675,16 @@ def plot_fill_between(ax, t, data, label='', c=None, hatch=None, k=1.,
         Times for each data point
     data : array, shape (samples, timesteps)
         Data to plot mean and +/- one sdev as a function of time
-    k : float
-        Scaling factor for standard deviations
+    confidence_interval: bool
+        If true, plot standard error instead of standard deviations
     """
     mm = data.mean(0)
-    sd = data.std(0) * k
+    sd = data.std(0)
+    if confidence_interval:
+        sd = sem(data, axis=0)
+        conf = 0.95
+        n = data.shape[0]
+        sd = sd * studentt.ppf((1 + conf) / 2, n - 1)
     p = ax.plot(t, mm, color=c, label=label)
     c = p[-1].get_color()
     p = ax.fill_between(t, mm - sd, mm + sd, alpha=alpha, color=c,

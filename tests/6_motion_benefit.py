@@ -63,9 +63,9 @@ if args.experiment == 'motion_benefit':
         ({'mode': 'Diffusion', 'dc': 0.0001},
          {'mode': 'PositionDiffusion', 'dc': 20.}),
     ]
-    drop_prob = None
     run_em = True
     run_nom = True
+    drop_prob_ = [None]
 elif args.experiment == 'motion_benefit_drop':
     # Motion benefit after dropping out cones
     motion_info_ = [
@@ -139,6 +139,7 @@ for (motion_gen, motion_prior), ds, drop_prob in product(
         n_itr=n_itr,
         n_g_itr=None,
         output_dir_base=args.output_dir,
+        save_hessian=True,
     )
 
     if run_em:

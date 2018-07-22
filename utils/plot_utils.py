@@ -28,7 +28,9 @@ def label_subplot(fig, ax, label, dx=0.005 * 4, dy=0.005):
 
     # Transform delta
     u, v = tf.transform((dx, dy)) - tf.transform((0, 0))
-    ax.text(-u, 1 + v, label, size=8, weight='bold', transform=ax.transAxes)
+    ax.text(-u, 1 + v, label, size=12,
+            #  weight='bold',
+            transform=ax.transAxes)
 
 
 def equalize_y_axes(ax0, ax1):

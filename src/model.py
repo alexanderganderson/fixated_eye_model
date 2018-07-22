@@ -51,7 +51,8 @@ class EMBurak(object):
         quad_reg=None,
         quad_reg_mean=None,
         s_range='pos',
-        save_pix_rf_coupling=False
+        save_pix_rf_coupling=False,
+        save_hessian=False,
     ):
         """
         Initialize the parts of the EM algorithm.
@@ -124,6 +125,7 @@ class EMBurak(object):
         self.save_mode = save_mode
         self.print_mode = print_mode
         self.save_pix_rf_coupling = save_pix_rf_coupling
+        self.save_hessian = save_hessian
 
         if s_range == 'pos':
             smin, smax = 0, 1
@@ -614,6 +616,10 @@ class EMBurak(object):
                 w = self.pf.WS[t0:tf].transpose()
                 tmp = self.tc.get_sp_rf_coupling(xr, yr, w)
                 iteration_data['pix_rf_coupling'] = tmp
+
+            if self.save_hessian:
+                iteration_data['hessian'] = self.tc.t_H.get_value()
+
 
             em_data[u] = iteration_data
         em_data['mode'] = 'EM'
