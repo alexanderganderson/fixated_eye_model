@@ -186,13 +186,14 @@ class EMBurak(object):
         # E Parameters (Particle Filter)
         self.n_p = n_p  # Number of particles for the EM
 
+        if drop_prob is None:
+            drop_prob = 0.
+        self.drop_prob = drop_prob
+
         self.neuron_layout = neuron_layout
         (self.n_n, XE, YE, IE, XS, YS) = self.init_pix_rf_centers(
             l_n, self.l_i, ds, de, mode=neuron_layout, drop_prob=drop_prob)
 
-        if drop_prob is None:
-            drop_prob = 0.
-        self.drop_prob = drop_prob
 
         # Variances of Gaussians for each pixel
         var = np.ones((self.l_i,)).astype('float32') * (
@@ -227,7 +228,9 @@ class EMBurak(object):
                 self.n_t, self.l_i, motion_gen['dc'], self.dt)
         elif motion_gen['mode'] == 'Experiment':
             self.pg = ExperimentalPathGenerator(
-                self.n_t, motion_gen['fpath'], self.dt)
+                self.n_t, motion_gen['fpath'], self.dt,
+                scaling_factor=motion_gen.get('scaling_factor'),
+            )
         else:
             raise ValueError(
                 'motion_gen[mode] must be Diffusion of Experiment')
@@ -448,7 +451,9 @@ class EMBurak(object):
         self.tc.reset()
         # Reset the neuron grid
         (self.n_n, XE, YE, IE, _, _) = self.init_pix_rf_centers(
-            self.l_n, self.l_i, self.ds, self.de, mode=self.neuron_layout)
+            self.l_n, self.l_i, self.ds, self.de, mode=self.neuron_layout,
+            drop_prob=self.drop_prob
+        )
         self.tc.t_XE.set_value(XE)
         self.tc.t_YE.set_value(YE)
         self.tc.t_IE.set_value(IE)

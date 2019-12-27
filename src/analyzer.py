@@ -5,7 +5,7 @@ import sys
 import os
 # from scipy.ndimage.filters import gaussian_filter
 import matplotlib as mpl
-mpl.use('Agg')
+#  mpl.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.stats import sem
 from scipy.stats import t as studentt# Student-t

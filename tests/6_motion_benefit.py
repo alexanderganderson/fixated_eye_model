@@ -66,6 +66,8 @@ if args.experiment == 'motion_benefit':
     run_em = True
     run_nom = True
     drop_prob_ = [None]
+    ds_ = [0.40]
+
 elif args.experiment == 'motion_benefit_drop':
     # Motion benefit after dropping out cones
     motion_info_ = [
@@ -74,9 +76,36 @@ elif args.experiment == 'motion_benefit_drop':
         ({'mode': 'Diffusion', 'dc': 0.0001},
          {'mode': 'PositionDiffusion', 'dc': 20.}),
     ]
-    drop_prob_ = [0.3]
+    drop_prob_ = [0.15, 0.3, 0.4, 0.5, 0.0, 0.8]
     run_em = True
     run_nom = False
+    ds_ = [0.40]
+
+elif args.experiment == 'motion_gain':
+    # Motion benefit as a function of motion magnitude.
+    motion_info_ = [
+        ({'mode': 'Experiment', 'fpath': 'data/paths.mat', 'scaling_factor': sf},
+         {'mode': 'PositionDiffusion', 'dc': 20.})
+        for sf in [1.08, 1.16, 1.5, 1.25, 0.1, 0.25, 0.5, 0.75, 1.0, 0.0]
+    ]
+    drop_prob_ = [None]
+    run_em = True
+    run_nom = False
+    ds_ = [0.40]
+
+elif args.experiment == 'stimulus_size':
+    # Motion benefit as a function of stimulus size
+    motion_info_ = [
+        ({'mode': 'Experiment', 'fpath': 'data/paths.mat'},
+         {'mode': 'PositionDiffusion', 'dc': 20.}),
+        ({'mode': 'Diffusion', 'dc': 0.0001},
+         {'mode': 'PositionDiffusion', 'dc': 20.}),
+    ]
+    drop_prob_ = [None]
+    run_em = True
+    run_nom = False
+    ds_ = [0.40 * ss for ss in [0.25, 0.5, 0.625, 0.75, 1.0, 1.125, 1.25, 1.5, 2.0]]
+
 elif args.experiment == 'no_motion_best_dc_infer':
     # Sweep over diffusion constants to find best amount of motion for each
     # amount of cone drop out
@@ -87,6 +116,8 @@ elif args.experiment == 'no_motion_best_dc_infer':
     drop_prob_ = [None]
     run_em = True
     run_nom = False
+    ds_ = [0.40]
+
 elif args.experiment == 'best_dc_cone_drop':
     motion_info_ = [
         ({'mode': 'Diffusion', 'dc': dc_gen},
@@ -115,14 +146,24 @@ elif args.experiment == 'best_dc_cone_drop':
     drop_prob_ = [0.0, 0.3, 0.5]
     run_em = True
     run_nom = False
+    ds_ = [0.40]
+
 else:
     raise ValueError('Invalid experiment name')
 
-ds_ = [0.40]
 de = 1.09
 
 for (motion_gen, motion_prior), ds, drop_prob in product(
     motion_info_, ds_, drop_prob_):
+
+    l_n = 8.1
+    scaling_factor = motion_gen.get('scaling_factor', 1.0)
+    if scaling_factor > 1.0:
+        l_n = l_n * scaling_factor
+    if args.experiment == 'stimulus_size':
+        # Make grid larger for increased stimulus size.
+        l_n = 11.
+
     emb = EMBurak(
         l_i=L_I,
         d=D,
@@ -135,7 +176,7 @@ for (motion_gen, motion_prior), ds, drop_prob in product(
         neuron_layout='hex',
         drop_prob=drop_prob,
         de=de,
-        l_n=8.1,
+        l_n=l_n,
         n_itr=n_itr,
         n_g_itr=None,
         output_dir_base=args.output_dir,

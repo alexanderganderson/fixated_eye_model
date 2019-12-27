@@ -124,7 +124,7 @@ class DiffusionPathGenerator(PathGenerator):
 class ExperimentalPathGenerator(PathGenerator):
     """Class that generates paths based on experimental data."""
 
-    def __init__(self, n_t, filename, dt):
+    def __init__(self, n_t, filename, dt, scaling_factor=None):
         """
         Create a path generator that uses real experimental data.
 
@@ -138,12 +138,16 @@ class ExperimentalPathGenerator(PathGenerator):
             Number of timesteps
         dt : float
             Time between samples for desired path.
+        scaling_factor : float
+            Apply a gain to either amplify the magnitude of the
+            eye movements
         """
         PathGenerator.__init__(self, n_t)
         self.data = loadmat(filename)
         self.dt = self.data['DT'][0, 0]
         self.paths = self.data['paths']
         self.n_runs, self.n_t_data, _ = self.paths.shape
+        self.scaling_factor = scaling_factor
 
         if not self.dt == dt:
             raise ValueError('Data timestep doesnt match simulation timestep')
@@ -156,6 +160,8 @@ class ExperimentalPathGenerator(PathGenerator):
         st = np.random.randint(self.n_t_data - self.n_t)
         pat = self.paths[q, st:(st + self.n_t), :].transpose()
         pat = pat - pat[:, 0:1]
+        if self.scaling_factor is not None:
+            pat *= self.scaling_factor
         return pat
 
     def mode(self):
@@ -164,11 +170,13 @@ class ExperimentalPathGenerator(PathGenerator):
 
 
 if __name__ == '__main__':
-    pg = DiffusionPathGenerator(100, 10, 100., 0.001, 1)
+
+    #  def __init__(self, n_t, lx, dc, dt):
+    pg = DiffusionPathGenerator(100, 10, 100., 0.001)
     path = pg.gen_path()
     print path
 
     fn = 'data/paths.mat'
-    pg = ExperimentalPathGenerator(100, fn, 0.001)
+    pg = ExperimentalPathGenerator(100, fn, 0.001, scaling_factor=0.5)
     path = pg.gen_path()
     print path
