@@ -104,7 +104,10 @@ elif args.experiment == 'stimulus_size':
     drop_prob_ = [None]
     run_em = True
     run_nom = False
-    ds_ = [0.40 * ss for ss in [0.25, 0.5, 0.625, 0.75, 1.0, 1.125, 1.25, 1.5, 2.0]]
+    ds_ = [0.40 * ss for ss in [
+        1.0, 0.75, 1.125, 1.25, 1.5, 2., 0.25, 0.5, 0.625,
+    ]
+    ]
 
 elif args.experiment == 'no_motion_best_dc_infer':
     # Sweep over diffusion constants to find best amount of motion for each
@@ -162,7 +165,8 @@ for (motion_gen, motion_prior), ds, drop_prob in product(
         l_n = l_n * scaling_factor
     if args.experiment == 'stimulus_size':
         # Make grid larger for increased stimulus size.
-        l_n = 11.
+        if ds > 0.45:
+            l_n = 11.
 
     emb = EMBurak(
         l_i=L_I,
