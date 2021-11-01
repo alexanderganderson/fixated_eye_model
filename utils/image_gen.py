@@ -1,44 +1,55 @@
-# Image Generator
-#
-# Simple class that generates a few different images
+"""Simple class to generate different images."""
 
 import numpy as np
 from scipy.signal import convolve2d
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
+
 from scipy.io import loadmat
 
 
 class ImageGenerator:
+    """Simple class to generate stimuli."""
 
-    def __init__(self, L_I):
+    def __init__(self, l_i):
         """
-        L_I - linear dimension of image
+        Initialize the image generator.
+
+        Parameters
+        ----------
+        l_i - linear dimension of image
         """
-        self.L_I = L_I
+        self.l_i = l_i
         self.reset_img()
 
     def reset_img(self):
-        self.img = np.zeros((self.L_I, self.L_I), dtype='float32')
+        """Reset the image and image name."""
+        self.img = np.zeros((self.l_i, self.l_i), dtype='float32')
         self.img_name = ''
 
     def dot(self):
-        self.img[self.L_I / 2, self.L_I / 2] = 1.
+        """Create a dot image."""
+        self.img[self.l_i / 2, self.l_i / 2] = 1.
 
     def make_digit(self, mode='fixed'):
         """
-        Makes the image a MNIST digit
+        Make the image a MNIST digit.
+
+        Parameters
+        ----------
         mode - 'fixed' gives you a particular 0
              - 'random' gives you a random digit
         """
-        if self.L_I != 14:
-            raise ValueError('To create a digit, L_I = 14')
+        if self.l_i != 14:
+            raise ValueError('To create a digit, l_i = 14')
 
         try:
             data = loadmat('data/mnist_small.mat')
-            IMAGES = data['IMAGES']
-            LABELS = data['LABELS'][0]
+            images = data['IMAGES']
+            labels = data['LABELS'][0]
 
-            K, self.L_I, _ = IMAGES.shape
+            K, self.l_i, _ = images.shape
 
             if mode == 'fixed':
                 # Chose a particular image that will work well
@@ -51,33 +62,40 @@ class ImageGenerator:
 
             self.reset_img()
             self.k = k
-            self.img[:, :] = IMAGES[k]
-            self.img_name = str(LABELS[k])
+            self.img[:, :] = images[k]
+            self.img_name = str(labels[k])
 
         except IOError, e:
             print e
             raise IOError(e)
 
-    def make_gabor(self, x0=0., y0=0., k=None,
+    def make_gabor(self, x0=0., y0=0., f=None,
                    eta=np.pi / 4., phi=0., sig=None):
         """
-        Make a Gabor
-        x0, y0 - gabor center relative to the center of the image
-        k = frequency amplitude
-        eta - frequency angle
-        phi - phase
+        Make a Gabor.
+
+        Parameters:
+        x0, y0: float
+            Gabor center relative to the center of the image
+        f : float
+            Frequency
+        eta : float
+            Frequency angle
+        phi : float
+            Phase
         img(x,y) = A * Exp( -((x-x0)^2 + (y-y0)^2)/sig ** 2) * Cos(kx + phi)
         kx = k (cos eta, sin eta) * (x, y)
+        k = 2 * pi * f
         """
-
-        if k is None:
-            k = 4. * np.pi / self.L_I
+        if f is None:
+            f = 2. / self.l_i
         if sig is None:
-            sig = self.L_I / 3.
+            sig = self.l_i / 3.
 
-        tmp = np.arange(-self.L_I / 2, self.L_I / 2)
+        tmp = np.arange(-self.l_i / 2, self.l_i / 2)
         X, Y = np.meshgrid(tmp, tmp)
 
+        k = 2 * np.pi * f
         k1 = k * np.cos(eta)
         k2 = k * np.sin(eta)
 
@@ -85,61 +103,106 @@ class ImageGenerator:
                     np.sin(phi + k1 * X + k2 * Y))
         self.img_name = 'gabor'
         self.normalize()
+        self.img = self.img.astype('float32')
 
-    def make_E(self):
+    def make_e(self):
+        """Make a one pixel thick E."""
         self.img[1, 2:-1] = 1
-        self.img[self.L_I / 2, 2:-1] = 1
+        self.img[self.l_i / 2, 2:-1] = 1
         self.img[-2, 2:-1] = 1
         self.img[1:-1, 2] = 1
         self.img_name = 'E'
 
-    def make_big_E(self):
-        self.img[2:4, 2:-2] = 1
-        self.img[self.L_I / 2 - 1: self.L_I / 2 + 1, 2:-2] = 1
-        self.img[-4:-2, 2:-2] = 1
-        self.img[2:-2, 2:4] = 1
+    def make_big_e(self):
+        """Make a two pixel thick E centered on the image."""
+        l = self.l_i
+        self.img[l/2-1:l/2+1, l/2-5:l/2+5] = 1
+        self.img[l/2-5:l/2-3, l/2-5:l/2+5] = 1
+        self.img[l/2+3:l/2+5, l/2-5:l/2+5] = 1
+        self.img[l/2-5:l/2+5, l/2-5:l/2-3] = 1
         self.img_name = 'bigE'
 
     def random(self):
+        """Create a white noise image."""
         self.img[:, :] = np.random.random(
-            (self.L_I, self.L_I)).astype('float32')
+            (self.l_i, self.l_i)).astype('float32')
         self.img_name = 'white_noise'
 
-    def make_T(self):
+    def make_t(self):
+        """Create a one pixel width T."""
         self.img[1, 1:-1] = 1
-        self.img[2:-1, self.L_I / 2] = 1
+        self.img[2:-1, self.l_i / 2] = 1
         self.img_name = 'T'
 
     def smooth(self, a=3, sig=0.1):
-        X = np.arange(-a, a + 1).astype('float32')
-        Y = X
-        Xg, Yg = np.meshgrid(X, Y)
-        F = np.exp(-(Xg ** 2 + Yg ** 2) / sig ** 2).astype('float32')
-        self.img = convolve2d(self.img, F, mode='same')
+        """Blur the image."""
+        x = np.arange(-a, a + 1).astype('float32')
+        y = x
+        xg, yg = np.meshgrid(x, y)
+        f = np.exp(-(xg ** 2 + yg ** 2) / sig ** 2).astype('float32')
+        self.img = convolve2d(self.img, f, mode='same')
 
     def normalize(self, m1=0., m2=1.):
-        """
-        Normalizes the image to have min = m1, max = m2
-        """
+        """Normalize the image to have min = m1, max = m2."""
         self.img = self.img - self.img.min()
         self.img = self.img / self.img.max()
 
         self.img = self.img * (m2 - m1) + m1
 
     def variance_normalize(self):
-        """
-        Normalizes the image to have sum of squares = 1
-        """
-
+        """Normalize the image to have sum of squares = 1."""
         self.img = self.img / np.sqrt(np.sum(self.img ** 2))
 
     def plot(self):
+        """Plot the image."""
         plt.imshow(self.img,
-                   # interpolation = 'nearest',
+                   interpolation='nearest',
                    cmap=plt.cm.gray_r)
         plt.colorbar()
         plt.title('Image')
         plt.show()
+
+
+def rotated_e():
+    """
+    Create E's for a tumbling E task.
+
+    Returns
+    -------
+    img : array, shape (4, 5, 5)
+        A collection of four 5 by 5 images of all rotations of an E
+    """
+    x = np.zeros((5, 5))
+    x[:, 0] = 1.
+    y = np.zeros((5, 5))
+    y[:, 2] = 1.
+    z = np.zeros((5, 5))
+    z[:, 4] = 1.
+    a = np.zeros((5, 5))
+    a[0, :] = 1.
+    b = np.zeros((5, 5))
+    b[2, :] = 1.
+    c = np.zeros((5, 5))
+    c[4, :] = 1.
+
+    img = np.zeros((4, 5, 5))
+    img[0] = x + y + z + a
+    img[1] = x + y + z + c
+    img[2] = a + b + c + x
+    img[3] = a + b + c + z
+    img[img > 0] = 1.
+
+    return img.astype('float32')
+
+
+def show_es():
+    """Show E's from tumbling E creator."""
+    img = rotated_e()
+    for i in range(4):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img[i], cmap=plt.cm.gray, interpolation='nearest')
+    plt.show()
+
 
 if __name__ == '__main__':
     ig = ImageGenerator(14)

@@ -26,7 +26,7 @@ filenames = []
 for _ in range(N_replicates):
     emb.reset()
     emb.gen_data()
-    emb.run_EM(N_itr=5)
+    emb.run_em(N_itr=5)
     filename = emb.save
     filenames.append(filename)
 

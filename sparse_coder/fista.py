@@ -2,10 +2,10 @@
 
 # Full Theano Implementation of FISTA
 
+from collections import OrderedDict
 import numpy as np
 import theano
 import theano.tensor as T
-from collections import OrderedDict
 
 
 def ista_updates(t_A, t_E_rec, t_Alpha, t_L, pos_only=True):
